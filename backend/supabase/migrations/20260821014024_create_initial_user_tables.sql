@@ -14,7 +14,13 @@ CREATE TABLE public.profiles (
 CREATE TABLE public.volunteers (
     id UUID PRIMARY KEY
         REFERENCES public.profiles(id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    
+    vehicle_type TEXT,
+
+    service_areas TEXT[],
+
+    availability JSONB
 );
 
 CREATE TABLE public.organisations (
