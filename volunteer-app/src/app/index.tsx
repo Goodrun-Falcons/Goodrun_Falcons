@@ -1,98 +1,132 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
+import { TaskCard } from '@/components/task-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import {
+  BottomTabInset,
+  MaxContentWidth,
+  Radius,
+  Spacing,
+  Typography,
+} from '@/constants/theme';
+import { mockTasks } from '@/data/mock-tasks';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 export default function HomeScreen() {
+  const urgentCount = mockTasks.filter((task) => task.urgency === 'urgent').length;
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <ThemedView type="canvas" style={styles.screen}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <FlatList
+          style={styles.list}
+          alwaysBounceHorizontal={false}
+          directionalLockEnabled
+          data={mockTasks}
+          keyExtractor={(task) => task.id}
+          renderItem={({ item }) => <TaskCard task={item} />}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={
+            <View style={styles.header}>
+              <ThemedText style={styles.greeting} themeColor="ink">
+                {getGreeting()}
+              </ThemedText>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+              <View style={styles.statRow}>
+                <ThemedView type="canvasSoft" style={styles.statCard}>
+                  <ThemedText style={styles.statNumber} themeColor="ink">
+                    {mockTasks.length}
+                  </ThemedText>
+                  <ThemedText style={styles.statLabel} themeColor="mute">
+                    Tasks this week
+                  </ThemedText>
+                </ThemedView>
+                <ThemedView type="primary" style={styles.statCard}>
+                  <ThemedText style={styles.statNumber} themeColor="primaryText">
+                    {urgentCount}
+                  </ThemedText>
+                  <ThemedText style={styles.statLabel} themeColor="primaryText">
+                    Urgent
+                  </ThemedText>
+                </ThemedView>
+              </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
+              <ThemedText style={styles.sectionHeading} themeColor="ink">
+                This week&apos;s tasks
+              </ThemedText>
+            </View>
+          }
+          ListEmptyComponent={
+            <ThemedText style={styles.emptyState} themeColor="mute">
+              No tasks near you right now — check back soon.
+            </ThemedText>
+          }
+        />
       </SafeAreaView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
+  },
+  list: {
+    width: '100%',
+  },
+  listContent: {
+    width: '100%',
     maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
     paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    paddingBottom: BottomTabInset + Spacing.three,
   },
-  title: {
+  header: {
+    paddingTop: Spacing.three,
+  },
+  greeting: {
+    ...Typography.displayXl,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.four - Spacing.one,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: Radius.lg,
+    padding: Spacing.three,
+    gap: Spacing.half,
+  },
+  statNumber: {
+    ...Typography.displayMd,
+  },
+  statLabel: {
+    ...Typography.bodySm,
+  },
+  sectionHeading: {
+    ...Typography.displaySm,
+    marginTop: Spacing.four + Spacing.half,
+    marginBottom: Spacing.sm,
+  },
+  separator: {
+    height: Spacing.three,
+  },
+  emptyState: {
+    ...Typography.bodyMd,
     textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    paddingTop: Spacing.six,
   },
 });
