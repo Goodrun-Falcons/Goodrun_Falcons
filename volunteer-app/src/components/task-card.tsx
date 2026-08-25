@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Elevation, Radius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { formatDueBy } from '@/lib/date';
 import { Task, TaskUrgency } from '@/types/task';
 
 const URGENCY_LABEL: Record<TaskUrgency, string> = {
@@ -12,19 +13,6 @@ const URGENCY_LABEL: Record<TaskUrgency, string> = {
   soon: 'This week',
   flexible: 'Flexible',
 };
-
-function formatDueBy(dueBy: string): string {
-  const due = new Date(`${dueBy}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const daysLeft = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (daysLeft <= 0) return 'Due today';
-  if (daysLeft === 1) return 'Due tomorrow';
-  if (daysLeft <= 6) return `Due in ${daysLeft} days`;
-  return `Due ${due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
-}
 
 export function TaskCard({ task }: { task: Task }) {
   const theme = useTheme();
@@ -108,7 +96,7 @@ export function TaskCard({ task }: { task: Task }) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
-    padding: Spacing.three,
+    padding: Spacing.md,
   },
   headerRow: {
     flexDirection: 'row',
@@ -124,7 +112,7 @@ const styles = StyleSheet.create({
   urgencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.half + 2,
+    gap: Spacing.xxs,
   },
   urgencyDot: {
     width: 6,
@@ -139,19 +127,19 @@ const styles = StyleSheet.create({
   },
   orgName: {
     ...Typography.bodyMdStrong,
-    marginTop: Spacing.two,
+    marginTop: Spacing.xs,
   },
   itemSummary: {
     ...Typography.bodySm,
     marginTop: Spacing.half,
   },
   routeSection: {
-    marginTop: Spacing.three,
+    marginTop: Spacing.md,
   },
   routeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.xs,
   },
   routeText: {
     ...Typography.bodySm,
@@ -168,20 +156,20 @@ const styles = StyleSheet.create({
   },
   routeConnector: {
     width: 1.5,
-    height: Spacing.two,
+    height: Spacing.xs,
     marginLeft: 3.25,
   },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    columnGap: Spacing.three,
-    rowGap: Spacing.one,
-    marginTop: Spacing.three,
+    columnGap: Spacing.md,
+    rowGap: Spacing.xxs,
+    marginTop: Spacing.md,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.half + 2,
+    gap: Spacing.xxs,
   },
   metaText: {
     ...Typography.bodySm,

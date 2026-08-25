@@ -1,4 +1,5 @@
-import { FlatList, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TaskCard } from '@/components/task-card';
@@ -12,6 +13,17 @@ import {
   Typography,
 } from '@/constants/theme';
 import { mockTasks } from '@/data/mock-tasks';
+import { useTheme } from '@/hooks/use-theme';
+import { daysUntil } from '@/lib/date';
+
+const THIS_WEEK_DAYS = 6;
+
+const RADIUS_OPTIONS: { label: string; km: number | null }[] = [
+  { label: '5 km', km: 5 },
+  { label: '10 km', km: 10 },
+  { label: '20 km', km: 20 },
+  { label: 'All', km: null },
+];
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -21,7 +33,17 @@ function getGreeting() {
 }
 
 export default function HomeScreen() {
-  const urgentCount = mockTasks.filter((task) => task.urgency === 'urgent').length;
+  const theme = useTheme();
+  const [radiusKm, setRadiusKm] = useState<number | null>(RADIUS_OPTIONS[0].km);
+
+  const urgentThisWeekCount = mockTasks.filter(
+    (task) => daysUntil(task.dueBy) <= THIS_WEEK_DAYS && task.urgency === 'urgent'
+  ).length;
+  const thisWeekCount = mockTasks.filter((task) => daysUntil(task.dueBy) <= THIS_WEEK_DAYS).length;
+
+  const tasks = mockTasks
+    .filter((task) => radiusKm === null || task.distanceKm <= radiusKm)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
 
   return (
     <ThemedView type="canvas" style={styles.screen}>
@@ -30,7 +52,7 @@ export default function HomeScreen() {
           style={styles.list}
           alwaysBounceHorizontal={false}
           directionalLockEnabled
-          data={mockTasks}
+          data={tasks}
           keyExtractor={(task) => task.id}
           renderItem={({ item }) => <TaskCard task={item} />}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -44,7 +66,7 @@ export default function HomeScreen() {
               <View style={styles.statRow}>
                 <ThemedView type="canvasSoft" style={styles.statCard}>
                   <ThemedText style={styles.statNumber} themeColor="ink">
-                    {mockTasks.length}
+                    {thisWeekCount}
                   </ThemedText>
                   <ThemedText style={styles.statLabel} themeColor="mute">
                     Tasks this week
@@ -52,7 +74,7 @@ export default function HomeScreen() {
                 </ThemedView>
                 <ThemedView type="primary" style={styles.statCard}>
                   <ThemedText style={styles.statNumber} themeColor="primaryText">
-                    {urgentCount}
+                    {urgentThisWeekCount}
                   </ThemedText>
                   <ThemedText style={styles.statLabel} themeColor="primaryText">
                     Urgent
@@ -61,13 +83,34 @@ export default function HomeScreen() {
               </View>
 
               <ThemedText style={styles.sectionHeading} themeColor="ink">
-                This week&apos;s tasks
+                Tasks
               </ThemedText>
+
+              <View style={styles.filterRow}>
+                {RADIUS_OPTIONS.map((option) => {
+                  const selected = option.km === radiusKm;
+                  return (
+                    <Pressable
+                      key={option.label}
+                      onPress={() => setRadiusKm(option.km)}
+                      style={[
+                        styles.chip,
+                        { backgroundColor: selected ? theme.secondary : theme.canvasSoft },
+                      ]}>
+                      <ThemedText
+                        style={styles.chipLabel}
+                        themeColor={selected ? 'secondaryText' : 'ink'}>
+                        {option.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           }
           ListEmptyComponent={
             <ThemedText style={styles.emptyState} themeColor="mute">
-              No tasks near you right now — check back soon.
+              No tasks within this radius — try widening your search.
             </ThemedText>
           }
         />
@@ -90,11 +133,11 @@ const styles = StyleSheet.create({
   listContent: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.four,
-    paddingBottom: BottomTabInset + Spacing.three,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: BottomTabInset + Spacing.md,
   },
   header: {
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.md,
   },
   greeting: {
     ...Typography.displayXl,
@@ -102,12 +145,12 @@ const styles = StyleSheet.create({
   statRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.four - Spacing.one,
+    marginTop: Spacing.lg - Spacing.xxs,
   },
   statCard: {
     flex: 1,
     borderRadius: Radius.lg,
-    padding: Spacing.three,
+    padding: Spacing.md,
     gap: Spacing.half,
   },
   statNumber: {
@@ -118,15 +161,29 @@ const styles = StyleSheet.create({
   },
   sectionHeading: {
     ...Typography.displaySm,
-    marginTop: Spacing.four + Spacing.half,
+    marginTop: Spacing.lg + Spacing.half,
     marginBottom: Spacing.sm,
   },
+  filterRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  chip: {
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  chipLabel: {
+    ...Typography.bodySm,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
+  },
   separator: {
-    height: Spacing.three,
+    height: Spacing.md,
   },
   emptyState: {
     ...Typography.bodyMd,
     textAlign: 'center',
-    paddingTop: Spacing.six,
+    paddingTop: Spacing.xxxl,
   },
 });
