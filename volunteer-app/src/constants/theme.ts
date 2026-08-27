@@ -7,6 +7,16 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+/**
+ * Medical Pantry brand colors.
+ * Red is the primary CTA/highlight color, navy is used for depth and contrast.
+ */
+export const BrandColors = {
+  red: '#d02327',
+  navy: '#141a43',
+  white: '#ffffff',
+} as const;
+
 export const Colors = {
   light: {
     text: '#000000',
@@ -14,6 +24,10 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    primary: BrandColors.red,
+    primaryText: BrandColors.white,
+    secondary: BrandColors.navy,
+    secondaryText: BrandColors.white,
   },
   dark: {
     text: '#ffffff',
@@ -21,10 +35,20 @@ export const Colors = {
     backgroundElement: '#212225',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
+    primary: BrandColors.red,
+    primaryText: BrandColors.white,
+    secondary: BrandColors.navy,
+    secondaryText: BrandColors.white,
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+
+/** Poppins is the brand typeface — bold for headings, regular for body text. */
+export const FontFamily = {
+  regular: 'Poppins_400Regular',
+  bold: 'Poppins_700Bold',
+} as const;
 
 export const Fonts = Platform.select({
   ios: {
