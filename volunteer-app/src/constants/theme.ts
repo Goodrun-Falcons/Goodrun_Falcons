@@ -138,16 +138,14 @@ export const Fonts = Platform.select({
 });
 
 export const Spacing = {
-  half: 2,
-  one: 4,
-  two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
-  // DESIGN.md values not already covered above
+  xxs: 4,
+  xs: 8,
   sm: 12,
+  md: 16,
+  lg: 24,
+  xl: 32,
   xxl: 48,
+  xxxl: 64,
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
