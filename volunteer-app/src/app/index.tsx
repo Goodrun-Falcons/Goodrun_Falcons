@@ -1,12 +1,16 @@
-import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { SymbolView } from 'expo-symbols';
+import { StatusBar } from 'expo-status-bar';
+import { useRouter } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TaskCard } from '@/components/task-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
   BottomTabInset,
+  Elevation,
   MaxContentWidth,
   Radius,
   Spacing,
@@ -14,15 +18,19 @@ import {
 } from '@/constants/theme';
 import { mockTasks } from '@/data/mock-tasks';
 import { useTheme } from '@/hooks/use-theme';
-import { daysUntil } from '@/lib/date';
 
-const THIS_WEEK_DAYS = 6;
+// Placeholder until Story 1-4 (auth/profile) supplies the real signed-in volunteer.
+const VOLUNTEER_NAME = 'Alex Rivera';
 
-const RADIUS_OPTIONS: { label: string; km: number | null }[] = [
-  { label: '5 km', km: 5 },
-  { label: '10 km', km: 10 },
-  { label: '20 km', km: 20 },
-  { label: 'All', km: null },
+const IMPACT_STATS = [
+  { label: 'Runs done', value: '18' },
+  { label: 'Items moved', value: '132' },
+  { label: 'Orgs helped', value: '9' },
+];
+
+const RECENT_ACTIVITY = [
+  { id: 'act-1', desc: 'Surgical gloves → Riverbank Aged Care', date: 'Yesterday' },
+  { id: 'act-2', desc: 'Wound dressing kits → Hope Street Pharmacy', date: 'Mon 24 Aug' },
 ];
 
 function getGreeting() {
@@ -34,87 +42,162 @@ function getGreeting() {
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const [radiusKm, setRadiusKm] = useState<number | null>(RADIUS_OPTIONS[0].km);
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-  const urgentThisWeekCount = mockTasks.filter(
-    (task) => daysUntil(task.dueBy) <= THIS_WEEK_DAYS && task.urgency === 'urgent'
-  ).length;
-  const thisWeekCount = mockTasks.filter((task) => daysUntil(task.dueBy) <= THIS_WEEK_DAYS).length;
-
-  const tasks = mockTasks
-    .filter((task) => radiusKm === null || task.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm);
+  const urgentTasks = mockTasks.filter((task) => task.urgency === 'urgent');
+  const nearestDistance = Math.min(...mockTasks.map((task) => task.distanceKm));
 
   return (
-    <ThemedView type="canvas" style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <FlatList
-          style={styles.list}
-          alwaysBounceHorizontal={false}
-          directionalLockEnabled
-          data={tasks}
-          keyExtractor={(task) => task.id}
-          renderItem={({ item }) => <TaskCard task={item} />}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            <View style={styles.header}>
-              <ThemedText style={styles.greeting} themeColor="ink">
-                {getGreeting()}
-              </ThemedText>
-
-              <View style={styles.statRow}>
-                <ThemedView type="canvasSoft" style={styles.statCard}>
-                  <ThemedText style={styles.statNumber} themeColor="ink">
-                    {thisWeekCount}
-                  </ThemedText>
-                  <ThemedText style={styles.statLabel} themeColor="mute">
-                    Tasks this week
-                  </ThemedText>
-                </ThemedView>
-                <ThemedView type="primary" style={styles.statCard}>
-                  <ThemedText style={styles.statNumber} themeColor="primaryText">
-                    {urgentThisWeekCount}
-                  </ThemedText>
-                  <ThemedText style={styles.statLabel} themeColor="primaryText">
-                    Urgent
-                  </ThemedText>
-                </ThemedView>
-              </View>
-
-              <ThemedText style={styles.sectionHeading} themeColor="ink">
-                Tasks
-              </ThemedText>
-
-              <View style={styles.filterRow}>
-                {RADIUS_OPTIONS.map((option) => {
-                  const selected = option.km === radiusKm;
-                  return (
-                    <Pressable
-                      key={option.label}
-                      onPress={() => setRadiusKm(option.km)}
-                      style={[
-                        styles.chip,
-                        { backgroundColor: selected ? theme.secondary : theme.canvasSoft },
-                      ]}>
-                      <ThemedText
-                        style={styles.chipLabel}
-                        themeColor={selected ? 'secondaryText' : 'ink'}>
-                        {option.label}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                })}
+    <ThemedView type="canvasSoft" style={styles.screen}>
+      <StatusBar style="light" />
+      <ScrollView
+        alwaysBounceHorizontal={false}
+        directionalLockEnabled
+        contentContainerStyle={styles.scrollContent}>
+        <View
+          style={[
+            styles.header,
+            { paddingTop: insets.top + Spacing.md, backgroundColor: theme.secondary },
+          ]}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTopRow}>
+              {/* Temporary logo — swap for the client's final asset once supplied. */}
+              <Image
+                source={require('@/assets/images/logo_temp.png')}
+                style={styles.brandLogo}
+                contentFit="contain"
+              />
+              <View style={styles.bellButton}>
+                <SymbolView
+                  name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
+                  tintColor={theme.primaryText}
+                  size={17}
+                />
+                <View
+                  style={[
+                    styles.bellDot,
+                    { backgroundColor: theme.primary, borderColor: theme.secondary },
+                  ]}
+                />
               </View>
             </View>
-          }
-          ListEmptyComponent={
-            <ThemedText style={styles.emptyState} themeColor="mute">
-              No tasks within this radius — try widening your search.
+
+            <ThemedText style={styles.greetingLabel} themeColor="primaryText">
+              {getGreeting()}
             </ThemedText>
-          }
-        />
-      </SafeAreaView>
+            <ThemedText style={styles.greetingName} themeColor="primaryText">
+              {VOLUNTEER_NAME}
+            </ThemedText>
+
+            <Pressable
+              onPress={() => router.push('/nearby')}
+              style={[styles.heroCard, { backgroundColor: theme.primary }]}>
+              <SymbolView
+                name={{ ios: 'shippingbox.fill', android: 'inventory_2', web: 'inventory_2' }}
+                tintColor={theme.primaryText}
+                size={64}
+                style={styles.heroWatermark}
+              />
+              <ThemedText style={styles.heroEyebrow} themeColor="primaryText">
+                Available this week
+              </ThemedText>
+              <ThemedText style={styles.heroTitle} themeColor="primaryText">
+                {mockTasks.length} runs near you
+              </ThemedText>
+              <ThemedText style={styles.heroSubtitle} themeColor="primaryText">
+                {urgentTasks.length} urgent · from {nearestDistance.toFixed(1)} km away
+              </ThemedText>
+              <View style={styles.heroPill}>
+                <ThemedText style={styles.heroPillLabel} themeColor="primaryText">
+                  Browse runs
+                </ThemedText>
+                <SymbolView
+                  name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
+                  tintColor={theme.primaryText}
+                  size={13}
+                />
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.content}>
+          <View style={styles.statRow}>
+            {IMPACT_STATS.map((stat) => (
+              <ThemedView key={stat.label} type="canvas" style={[styles.statCard, Elevation.level1]}>
+                <ThemedText style={styles.statValue} themeColor="ink">
+                  {stat.value}
+                </ThemedText>
+                <ThemedText style={styles.statLabel} themeColor="mute">
+                  {stat.label}
+                </ThemedText>
+              </ThemedView>
+            ))}
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <ThemedText style={styles.sectionHeading} themeColor="ink">
+                Urgent today
+              </ThemedText>
+              <Pressable onPress={() => router.push('/nearby')}>
+                <ThemedText style={styles.seeAll} themeColor="primary">
+                  See all
+                </ThemedText>
+              </Pressable>
+            </View>
+            {urgentTasks.length === 0 ? (
+              <ThemedText style={styles.emptyState} themeColor="mute">
+                Nothing urgent right now.
+              </ThemedText>
+            ) : (
+              <View style={styles.cardGroup}>
+                {urgentTasks.map((task) => (
+                  <TaskCard key={task.id} task={task} />
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionHeading} themeColor="ink">
+              Recent activity
+            </ThemedText>
+            <ThemedView type="canvas" style={[styles.activityCard, Elevation.level1]}>
+              {RECENT_ACTIVITY.map((activity, i) => (
+                <View
+                  key={activity.id}
+                  style={[
+                    styles.activityRow,
+                    i > 0 && { borderTopWidth: 1, borderTopColor: theme.surfacePressed },
+                  ]}>
+                  <View style={[styles.activityIcon, { backgroundColor: theme.canvasSoft }]}>
+                    <SymbolView
+                      name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+                      tintColor={theme.secondary}
+                      size={14}
+                    />
+                  </View>
+                  <View style={styles.activityTextGroup}>
+                    <ThemedText style={styles.activityDesc} themeColor="ink" numberOfLines={1}>
+                      {activity.desc}
+                    </ThemedText>
+                    <ThemedText style={styles.activityDate} themeColor="mute">
+                      {activity.date}
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.doneBadge, { backgroundColor: theme.canvasSoft }]}>
+                    <ThemedText style={styles.doneBadgeLabel} themeColor="secondary">
+                      Done
+                    </ThemedText>
+                  </View>
+                </View>
+              ))}
+            </ThemedView>
+          </View>
+        </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -123,67 +206,185 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  safeArea: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  list: {
-    width: '100%',
-  },
-  listContent: {
-    width: '100%',
-    maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.lg,
+  scrollContent: {
     paddingBottom: BottomTabInset + Spacing.md,
   },
   header: {
-    paddingTop: Spacing.md,
+    alignItems: 'center',
   },
-  greeting: {
-    ...Typography.displayXl,
+  headerContent: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xxxl,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  brandLogo: {
+    width: 122,
+    height: 28,
+  },
+  bellButton: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 6,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+  },
+  greetingLabel: {
+    ...Typography.bodySm,
+    opacity: 0.6,
+    marginTop: Spacing.lg,
+  },
+  greetingName: {
+    ...Typography.displayMd,
+  },
+  heroCard: {
+    marginTop: Spacing.lg,
+    borderRadius: Radius.xl,
+    padding: Spacing.md,
+    overflow: 'hidden',
+  },
+  heroWatermark: {
+    position: 'absolute',
+    top: Spacing.xs,
+    right: Spacing.sm,
+    opacity: 0.15,
+  },
+  heroEyebrow: {
+    ...Typography.caption,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    opacity: 0.75,
+  },
+  heroTitle: {
+    ...Typography.displaySm,
+    marginTop: Spacing.half,
+  },
+  heroSubtitle: {
+    ...Typography.bodySm,
+    opacity: 0.75,
+    marginTop: 2,
+    marginBottom: Spacing.sm,
+  },
+  heroPill: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    gap: Spacing.xxs,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xxs,
+  },
+  heroPillLabel: {
+    ...Typography.bodySm,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
+  },
+  content: {
+    alignItems: 'center',
   },
   statRow: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.lg - Spacing.xxs,
+    paddingHorizontal: Spacing.lg,
+    marginTop: -Spacing.lg,
   },
   statCard: {
     flex: 1,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: Spacing.half,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    alignItems: 'center',
   },
-  statNumber: {
-    ...Typography.displayMd,
+  statValue: {
+    ...Typography.displaySm,
   },
   statLabel: {
-    ...Typography.bodySm,
+    ...Typography.caption,
+    textAlign: 'center',
+    marginTop: 2,
   },
-  sectionHeading: {
-    ...Typography.displaySm,
-    marginTop: Spacing.lg + Spacing.half,
+  section: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.lg,
+    marginTop: Spacing.lg,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  filterRow: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-    marginBottom: Spacing.md,
+  sectionHeading: {
+    ...Typography.bodyMdStrong,
+    marginBottom: Spacing.sm,
   },
-  chip: {
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-  },
-  chipLabel: {
+  seeAll: {
     ...Typography.bodySm,
     fontFamily: Typography.bodyMdStrong.fontFamily,
   },
-  separator: {
-    height: Spacing.md,
+  cardGroup: {
+    gap: Spacing.md,
   },
   emptyState: {
     ...Typography.bodyMd,
     textAlign: 'center',
-    paddingTop: Spacing.xxxl,
+    paddingVertical: Spacing.lg,
+  },
+  activityCard: {
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  activityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityTextGroup: {
+    flex: 1,
+  },
+  activityDesc: {
+    ...Typography.bodySm,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
+  },
+  activityDate: {
+    ...Typography.caption,
+    marginTop: 2,
+  },
+  doneBadge: {
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+  },
+  doneBadgeLabel: {
+    ...Typography.caption,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
   },
 });
