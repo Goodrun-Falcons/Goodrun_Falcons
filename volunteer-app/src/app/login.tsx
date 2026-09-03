@@ -50,7 +50,7 @@ export default function LoginScreen() {
                             type= 'default'
                             themeColor="secondaryText"
                         >
-                            Register
+                            Sign up
                         </ThemedText>
                     </Pressable>
 
