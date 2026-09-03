@@ -44,22 +44,22 @@ const styles = StyleSheet.create({
   heading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.two,
   },
   pressedHeading: {
     opacity: 0.7,
   },
   button: {
-    width: Spacing.lg,
-    height: Spacing.lg,
+    width: Spacing.four,
+    height: Spacing.four,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
-    marginTop: Spacing.md,
-    borderRadius: Spacing.md,
-    marginLeft: Spacing.lg,
-    padding: Spacing.lg,
+    marginTop: Spacing.three,
+    borderRadius: Spacing.three,
+    marginLeft: Spacing.four,
+    padding: Spacing.four,
   },
 });
