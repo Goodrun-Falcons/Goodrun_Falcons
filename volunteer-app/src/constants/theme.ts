@@ -28,6 +28,15 @@ export const Colors = {
     primaryText: BrandColors.white,
     secondary: BrandColors.navy,
     secondaryText: BrandColors.white,
+    // DESIGN.md tokens (Medical Pantry design system)
+    ink: '#141a43',
+    body: '#4a4a4a',
+    mute: '#8a8d99',
+    canvas: '#ffffff',
+    canvasSoft: '#f5f5f7',
+    canvasNavy: '#141a43',
+    surfacePressed: '#e8e8ea',
+    link: BrandColors.red,
   },
   dark: {
     text: '#ffffff',
@@ -39,6 +48,16 @@ export const Colors = {
     primaryText: BrandColors.white,
     secondary: BrandColors.navy,
     secondaryText: BrandColors.white,
+    // DESIGN.md only specifies a light theme — these dark equivalents are derived,
+    // not designer-specified, to keep the app usable in dark mode.
+    ink: '#ffffff',
+    body: '#c7c9d1',
+    mute: '#8a8d99',
+    canvas: '#000000',
+    canvasSoft: '#212225',
+    canvasNavy: '#141a43',
+    surfacePressed: '#2E3135',
+    link: BrandColors.red,
   },
 } as const;
 
@@ -48,6 +67,49 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 export const FontFamily = {
   regular: 'Poppins_400Regular',
   bold: 'Poppins_700Bold',
+} as const;
+
+/** DESIGN.md typography scale. */
+export const Typography = {
+  displayXxl: { fontFamily: FontFamily.bold, fontSize: 48, lineHeight: 58 },
+  displayXl: { fontFamily: FontFamily.bold, fontSize: 34, lineHeight: 42 },
+  displayLg: { fontFamily: FontFamily.bold, fontSize: 28, lineHeight: 36 },
+  displayMd: { fontFamily: FontFamily.bold, fontSize: 22, lineHeight: 30 },
+  displaySm: { fontFamily: FontFamily.bold, fontSize: 18, lineHeight: 26 },
+  bodyLg: { fontFamily: FontFamily.regular, fontSize: 17, lineHeight: 25.5 },
+  bodyMd: { fontFamily: FontFamily.regular, fontSize: 15, lineHeight: 22.5 },
+  bodyMdStrong: { fontFamily: FontFamily.bold, fontSize: 15, lineHeight: 22.5 },
+  bodySm: { fontFamily: FontFamily.regular, fontSize: 13, lineHeight: 19.5 },
+  caption: { fontFamily: FontFamily.regular, fontSize: 12, lineHeight: 18 },
+  buttonMd: { fontFamily: FontFamily.bold, fontSize: 15, lineHeight: 20 },
+} as const;
+
+/** DESIGN.md border-radius scale. */
+export const Radius = {
+  none: 0,
+  sm: 6,
+  md: 10,
+  lg: 14,
+  xl: 20,
+  full: 9999,
+} as const;
+
+/** DESIGN.md elevation levels, expressed as RN shadow/elevation props. */
+export const Elevation = {
+  level1: {
+    shadowColor: BrandColors.navy,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  level2: {
+    shadowColor: BrandColors.navy,
+    shadowOpacity: 0.16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
+  },
 } as const;
 
 export const Fonts = Platform.select({
@@ -76,13 +138,14 @@ export const Fonts = Platform.select({
 });
 
 export const Spacing = {
-  half: 2,
-  one: 4,
-  two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
+  xxs: 4,
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+  xxxl: 64,
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
