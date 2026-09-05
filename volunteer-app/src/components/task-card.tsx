@@ -28,7 +28,8 @@ export function TaskCard({ task }: { task: Task }) {
           {isUrgent && <View style={[styles.urgencyDot, { backgroundColor: theme.primary }]} />}
           <ThemedText
             style={[styles.urgencyLabel, isUrgent && styles.urgencyLabelUrgent]}
-            themeColor={isUrgent ? 'primary' : 'mute'}>
+            themeColor={isUrgent ? 'primary' : 'mute'}
+          >
             {URGENCY_LABEL[task.urgency]}
           </ThemedText>
         </View>
