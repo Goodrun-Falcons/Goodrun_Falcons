@@ -1,4 +1,6 @@
-import { Task } from '@/types/task';
+import { Coordinates, Task } from '@/types/task';
+
+export const WAREHOUSE_COORDS: Coordinates = { lat: -37.7749, lng: 144.9631 };
 
 export const mockTasks: Task[] = [
   {
@@ -12,6 +14,7 @@ export const mockTasks: Task[] = [
     pickupAddress: '128 Grattan St, Carlton',
     deliveryAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     etaMinutes: 14,
+    orgCoords: { lat: -37.801, lng: 144.9691 },
   },
   {
     id: '2',
@@ -24,6 +27,7 @@ export const mockTasks: Task[] = [
     pickupAddress: '52 Riverside Ave, Fitzroy',
     deliveryAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     etaMinutes: 11,
+    orgCoords: { lat: -37.7996, lng: 144.9784 },
   },
   {
     id: '3',
@@ -36,6 +40,7 @@ export const mockTasks: Task[] = [
     pickupAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     deliveryAddress: '14 Hope St, Northcote',
     etaMinutes: 9,
+    orgCoords: { lat: -37.7699, lng: 144.9998 },
   },
   {
     id: '4',
@@ -48,6 +53,7 @@ export const mockTasks: Task[] = [
     pickupAddress: '210 Sydney Rd, Coburg',
     deliveryAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     etaMinutes: 17,
+    orgCoords: { lat: -37.748, lng: 144.9633 },
   },
   {
     id: '5',
@@ -60,6 +66,7 @@ export const mockTasks: Task[] = [
     pickupAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     deliveryAddress: '77 Barkly St, Footscray',
     etaMinutes: 22,
+    orgCoords: { lat: -37.7998, lng: 144.8998 },
   },
   {
     id: '6',
@@ -72,6 +79,7 @@ export const mockTasks: Task[] = [
     pickupAddress: '90 Harbour Esplanade, Docklands',
     deliveryAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     etaMinutes: 6,
+    orgCoords: { lat: -37.8145, lng: 144.946 },
   },
   {
     id: '7',
@@ -84,6 +92,7 @@ export const mockTasks: Task[] = [
     pickupAddress: '5 Southbank Blvd, Southbank',
     deliveryAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     etaMinutes: 20,
+    orgCoords: { lat: -37.8226, lng: 144.9648 },
   },
   {
     id: '8',
@@ -96,5 +105,6 @@ export const mockTasks: Task[] = [
     pickupAddress: 'Medical Pantry Warehouse, 8 Dawson St, Brunswick',
     deliveryAddress: '23 Elgar Rd, Box Hill',
     etaMinutes: 28,
+    orgCoords: { lat: -37.8199, lng: 145.1225 },
   },
 ];

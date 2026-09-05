@@ -54,12 +54,14 @@ export default function HomeScreen() {
       <ScrollView
         alwaysBounceHorizontal={false}
         directionalLockEnabled
-        contentContainerStyle={styles.scrollContent}>
+        contentContainerStyle={styles.scrollContent}
+      >
         <View
           style={[
             styles.header,
             { paddingTop: insets.top + Spacing.md, backgroundColor: theme.secondary },
-          ]}>
+          ]}
+        >
           <View style={styles.headerContent}>
             <View style={styles.headerTopRow}>
               {/* Temporary logo — swap for the client's final asset once supplied. */}
@@ -92,7 +94,8 @@ export default function HomeScreen() {
 
             <Pressable
               onPress={() => router.push('/nearby')}
-              style={[styles.heroCard, { backgroundColor: theme.primary }]}>
+              style={[styles.heroCard, { backgroundColor: theme.primary }]}
+            >
               <SymbolView
                 name={{ ios: 'shippingbox.fill', android: 'inventory_2', web: 'inventory_2' }}
                 tintColor={theme.primaryText}
@@ -125,7 +128,11 @@ export default function HomeScreen() {
         <View style={styles.content}>
           <View style={styles.statRow}>
             {IMPACT_STATS.map((stat) => (
-              <ThemedView key={stat.label} type="canvas" style={[styles.statCard, Elevation.level1]}>
+              <ThemedView
+                key={stat.label}
+                type="canvas"
+                style={[styles.statCard, Elevation.level1]}
+              >
                 <ThemedText style={styles.statValue} themeColor="ink">
                   {stat.value}
                 </ThemedText>
@@ -171,7 +178,8 @@ export default function HomeScreen() {
                   style={[
                     styles.activityRow,
                     i > 0 && { borderTopWidth: 1, borderTopColor: theme.surfacePressed },
-                  ]}>
+                  ]}
+                >
                   <View style={[styles.activityIcon, { backgroundColor: theme.canvasSoft }]}>
                     <SymbolView
                       name={{ ios: 'checkmark', android: 'check', web: 'check' }}
