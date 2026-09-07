@@ -1,6 +1,7 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import { createClient } from "@supabase/supabase-js";
+import type { FastifyInstance } from "fastify"
 
 const app = Fastify({ logger: true });
 
