@@ -1,8 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { createClient } from "@supabase/supabase-js";
+import "dotenv/config";
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+
+// initialise Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_PUBLISH_KEY!
+);
 
 export default async function routeAPI(app: FastifyInstance) {
 
