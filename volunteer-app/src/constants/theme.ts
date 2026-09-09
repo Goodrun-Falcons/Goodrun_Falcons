@@ -146,6 +146,9 @@ export const Spacing = {
   xl: 32,
   xxl: 48,
   xxxl: 64,
+  // Not part of DESIGN.md's scale — kept for a couple of hairline-sized gaps
+  // that don't map onto xxs (4px).
+  half: 2,
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
