@@ -1,6 +1,7 @@
 import { StyleSheet, View , ScrollView ,TextInput, Pressable } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BrandColors, Spacing, Radius } from '@/constants/theme';
+import { router } from 'expo-router';
 
 export default function RegisterScreen() {
     return(
@@ -16,17 +17,21 @@ export default function RegisterScreen() {
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style = {styles.body}>
-                    <Pressable style = {styles.button}>
+                    <Pressable 
+                        style = {styles.button}
+                        onPress={() => router.push('/login')}
+                    >
                         <ThemedText
-                            type='heading'
+                            type='smallBold'
                             themeColor="secondaryText"
                         >
-                            ←Back
+                            ← Back
                         </ThemedText>
                     </Pressable>
 
                     <ThemedText
-                        type='subtitle'
+                        type="heading"
+                        style={styles.welcomeText}
                     >
                         Welcome!{'\n'}Lets get started!
                     </ThemedText>
@@ -34,7 +39,7 @@ export default function RegisterScreen() {
                 
                 <View style = {styles.form}>
                     <ThemedText
-                        type='heading'
+                        type='smallBold'
                     >
                         Full Name
                     </ThemedText>
@@ -43,7 +48,7 @@ export default function RegisterScreen() {
 
                 <View style = {styles.form}>
                     <ThemedText
-                        type='heading'
+                        type='smallBold'
                     >
                         Email Address
                     </ThemedText>
@@ -55,7 +60,7 @@ export default function RegisterScreen() {
 
                 <View style = {styles.form}>
                     <ThemedText
-                        type='heading'
+                        type='smallBold'
                     >
                         Phone Number
                     </ThemedText>
@@ -64,19 +69,7 @@ export default function RegisterScreen() {
 
                 <View style = {styles.form}>
                     <ThemedText
-                        type='heading'
-                    >
-                        Available Period
-                    </ThemedText>
-                    <TextInput 
-                        style = {styles.input} 
-                        placeholder='Morning/Afternoon/Evening'
-                    />
-                </View>
-
-                <View style = {styles.form}>
-                    <ThemedText
-                        type='heading'
+                        type='smallBold'
                     >
                         Service Area
                     </ThemedText>
@@ -88,19 +81,22 @@ export default function RegisterScreen() {
 
                 <View style = {styles.form}>
                     <ThemedText
-                        type='heading'
+                        type='smallBold'
                     >
                         Vehicle Type
                     </ThemedText>
                     <TextInput 
                         style = {styles.input} 
-                        placeholder='Null/Bicycle/Motorbike/BicycleCar/Van'
+                        placeholder='Null/Bicycle/Motorbike/Car/Van'
                     />
                 </View>
 
-                <Pressable style = {styles.submit}>
+                <Pressable 
+                    style = {styles.submit}
+                    onPress={() => router.push('/register-success')}
+                >
                     <ThemedText
-                        type='heading'
+                        type='smallBold'
                         themeColor="secondaryText"
                     >
                         Submit
@@ -140,11 +136,11 @@ const styles = StyleSheet.create({
 
     input: {
         backgroundColor: BrandColors.white,
-        borderWidth: 5,
+        borderWidth: 2,
         borderColor: BrandColors.navy,
         borderRadius: Radius.xl,
-        height: 45,
-        width: '82.353%',
+        height: 48,
+        width: '90%',
         paddingHorizontal: Spacing.md,
     },
 
@@ -152,15 +148,16 @@ const styles = StyleSheet.create({
         marginLeft: Spacing.lg,
         backgroundColor: BrandColors.red,
         borderRadius: Radius.xl,
-        width: 88,
-        height: 40,
+        width: '23%',
+        height: 48,
         justifyContent: 'center',
+        alignItems: 'center',
         alignSelf: 'flex-start',
     },
 
     form: {
         marginTop: Spacing.lg,
-        marginLeft: '15%',
+        marginLeft: '10%',
         alignItems: 'flex-start',
     },
 
@@ -169,8 +166,8 @@ const styles = StyleSheet.create({
         marginRight: Spacing.lg,
         backgroundColor: BrandColors.red,
         borderRadius: Radius.xl,
-        width: 100,
-        height: 40,
+        width: '23%',
+        height: 48,
         justifyContent: 'center',
         alignItems: 'center',
         alignSelf: 'flex-end',
@@ -178,5 +175,10 @@ const styles = StyleSheet.create({
 
     scrollContent: {
         paddingBottom: '50%',
+    },
+
+    welcomeText: {
+        alignSelf: 'flex-start',
+        marginLeft: '10%',
     },
 })
