@@ -93,13 +93,12 @@ export default function SignupPage() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("organisations").insert({
-      id: data.user.id,
+    const { error: insertError } = await supabase.from("signup_requests").insert({
+      auth_user_id: data.user.id,
       name: orgName,
       email,
       phone: phone || null,
       address: address || null,
-      verified: false,
     });
 
     setLoading(false);
