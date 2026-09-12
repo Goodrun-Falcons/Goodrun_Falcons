@@ -22,6 +22,7 @@ function CheckIcon({ met }: { met: boolean }) {
 }
 
 export function PasswordRequirements({ password }: { password: string }) {
+  if (!password) return null;
   return (
     <ul className="flex flex-col gap-1.5">
       {RULES.map((rule) => {
