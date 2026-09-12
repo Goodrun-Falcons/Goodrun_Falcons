@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
-import type { Database } from "@/supabase/types";
+import type { Database } from "../../../../supabase/types";
 
 type Item = Database["public"]["Tables"]["items"]["Row"];
 
