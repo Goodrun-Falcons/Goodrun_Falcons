@@ -3,6 +3,12 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { AddressInput } from "@/components/AddressInput";
+import {
+  PasswordRequirements,
+  PasswordStrengthMeter,
+  PasswordMatchIndicator,
+  passwordMeetsRequirements,
+} from "@/components/PasswordRequirements";
 
 function MailIcon() {
   return (
@@ -76,8 +82,8 @@ export default function SignupPage() {
       setError("Passwords do not match.");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (!passwordMeetsRequirements(password)) {
+      setError("Password does not meet all requirements below.");
       return;
     }
 
@@ -157,7 +163,7 @@ export default function SignupPage() {
             <div className="flex flex-col items-center gap-4 py-6 text-center">
               <CheckCircleIcon />
               <h2 className="text-[24px] font-semibold leading-[32px] text-[#191c1d]">
-                Request Submitted
+                Registration Submitted
               </h2>
               <p className="text-[14px] leading-[20px] text-[#46464e]">
                 Your details have been sent to an admin. A representative will
@@ -268,6 +274,8 @@ export default function SignupPage() {
                       <LockIcon />
                     </span>
                   </div>
+                  <PasswordStrengthMeter password={password} />
+                  <PasswordRequirements password={password} />
                 </div>
 
                 <div className="flex flex-col gap-2 pb-1">
@@ -289,6 +297,7 @@ export default function SignupPage() {
                       <LockIcon />
                     </span>
                   </div>
+                  <PasswordMatchIndicator password={password} confirmPassword={confirmPassword} />
                 </div>
 
                 {error && (
