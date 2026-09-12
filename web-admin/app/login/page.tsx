@@ -279,6 +279,15 @@ export default function LoginPage() {
               {isAdmin ? "Organization Login →" : "Admin Login →"}
             </button>
           </div>
+
+          {!isAdmin && (
+            <p className="mt-4 text-center text-[14px] text-[#46464e]">
+              New organisation?{" "}
+              <a href="/signup" className="text-[12px] font-semibold tracking-[0.6px] text-[#b9100b]">
+                Register →
+              </a>
+            </p>
+          )}
         </div>
       </div>
     </div>

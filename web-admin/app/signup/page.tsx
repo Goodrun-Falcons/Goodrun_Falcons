@@ -175,7 +175,7 @@ export default function SignupPage() {
             <>
               <div className="flex flex-col gap-2">
                 <h2 className="text-[24px] font-semibold leading-[32px] text-[#191c1d]">
-                  Organisation Signup
+                  Organisation Registration
                 </h2>
                 <p className="text-[14px] leading-[20px] text-[#46464e]">
                   Tell us about your organisation to request access to the portal.
@@ -300,7 +300,7 @@ export default function SignupPage() {
                   disabled={loading}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#b9100b] px-4 py-3 text-[12px] font-semibold tracking-[0.6px] text-white disabled:opacity-60"
                 >
-                  {loading ? "Submitting…" : "Request Access"}
+                  {loading ? "Submitting…" : "Register"}
                 </button>
               </form>
 
