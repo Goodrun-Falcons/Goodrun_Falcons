@@ -299,6 +299,41 @@ export type Database = {
           },
         ]
       }
+      support_tickets: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          organisation_id: string
+          status: string
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          organisation_id: string
+          status?: string
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          organisation_id?: string
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       volunteers: {
         Row: {
           availability: Json | null
