@@ -118,23 +118,7 @@ export default function ProfileScreen() {
             },
           ]}
         >
-          <View style={styles.headerRow}>
-            <ThemedText type="heading" style={styles.whiteText}>
-              Profile
-            </ThemedText>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Profile settings"
-              onPress={() => setNotice('Settings are not available yet.')}
-              style={({ pressed }) => [
-                styles.iconButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <ThemedText style={styles.settingsIcon}>⚙</ThemedText>
-            </Pressable>
-          </View>
+          
 
           <View style={styles.identity}>
             <View style={styles.avatarContainer}>

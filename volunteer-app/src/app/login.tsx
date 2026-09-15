@@ -57,7 +57,10 @@ export default function LoginScreen() {
                         </ThemedText>
                     </Pressable>
 
-                    <Pressable style={styles.button}>
+                    <Pressable 
+                        style={styles.button}
+                        onPress={() => router.push('/home')}
+                    >
                         <ThemedText
                             type= 'smallBold'
                             themeColor="secondaryText"
@@ -112,7 +115,7 @@ const styles = StyleSheet.create({
     input: {
         backgroundColor: BrandColors.white,
         borderRadius: Radius.xl,
-        height: 48,
+        minHeight: 44,
         paddingHorizontal: Spacing.md,
     },
 
@@ -136,7 +139,7 @@ const styles = StyleSheet.create({
         marginTop: Spacing.xl,
         backgroundColor: BrandColors.red,
         borderRadius: Radius.xl,
-        height: 48,
+        minHeight: 44,
         justifyContent: 'center',
         alignItems: 'center',
         flex: 1,

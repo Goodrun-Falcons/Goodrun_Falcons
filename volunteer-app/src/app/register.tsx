@@ -91,6 +91,30 @@ export default function RegisterScreen() {
                     />
                 </View>
 
+                <View style = {styles.form}>
+                    <ThemedText
+                        type='smallBold'
+                    >
+                        Preferred Password
+                    </ThemedText>
+                    <TextInput 
+                        style = {styles.input} 
+                        secureTextEntry
+                    />
+                </View>
+
+                <View style = {styles.form}>
+                    <ThemedText
+                        type='smallBold'
+                    >
+                        Confirm Password
+                    </ThemedText>
+                    <TextInput 
+                        style = {styles.input} 
+                        secureTextEntry
+                    />
+                </View>
+
                 <Pressable 
                     style = {styles.submit}
                     onPress={() => router.push('/register-success')}
@@ -136,10 +160,10 @@ const styles = StyleSheet.create({
 
     input: {
         backgroundColor: BrandColors.white,
-        borderWidth: 2,
+        borderWidth: 1.5,
         borderColor: BrandColors.navy,
         borderRadius: Radius.xl,
-        height: 48,
+        minHeight: 44,
         width: '90%',
         paddingHorizontal: Spacing.md,
     },
@@ -149,7 +173,7 @@ const styles = StyleSheet.create({
         backgroundColor: BrandColors.red,
         borderRadius: Radius.xl,
         width: '23%',
-        height: 48,
+        minHeight: 44,
         justifyContent: 'center',
         alignItems: 'center',
         alignSelf: 'flex-start',
