@@ -46,7 +46,7 @@ export default function LoginScreen() {
 
                 <View style={styles.buttonRow}>
                     <Pressable 
-                        style={styles.button}
+                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                         onPress={() => router.push('/register')}
                     >
                         <ThemedText
@@ -57,7 +57,10 @@ export default function LoginScreen() {
                         </ThemedText>
                     </Pressable>
 
-                    <Pressable style={styles.button}>
+                    <Pressable 
+                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                        onPress={() => router.push('/home')}
+                    >
                         <ThemedText
                             type= 'smallBold'
                             themeColor="secondaryText"
@@ -112,7 +115,7 @@ const styles = StyleSheet.create({
     input: {
         backgroundColor: BrandColors.white,
         borderRadius: Radius.xl,
-        height: 48,
+        minHeight: 44,
         paddingHorizontal: Spacing.md,
     },
 
@@ -136,9 +139,13 @@ const styles = StyleSheet.create({
         marginTop: Spacing.xl,
         backgroundColor: BrandColors.red,
         borderRadius: Radius.xl,
-        height: 48,
+        minHeight: 44,
         justifyContent: 'center',
         alignItems: 'center',
         flex: 1,
-    }
+    },
+
+    pressed: {
+        opacity: 0.7,
+    },
 });
