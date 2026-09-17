@@ -46,7 +46,7 @@ export default function LoginScreen() {
 
                 <View style={styles.buttonRow}>
                     <Pressable 
-                        style={styles.button}
+                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                         onPress={() => router.push('/register')}
                     >
                         <ThemedText
@@ -58,7 +58,7 @@ export default function LoginScreen() {
                     </Pressable>
 
                     <Pressable 
-                        style={styles.button}
+                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                         onPress={() => router.push('/home')}
                     >
                         <ThemedText
@@ -143,5 +143,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         flex: 1,
-    }
+    },
+
+    pressed: {
+        opacity: 0.7,
+    },
 });

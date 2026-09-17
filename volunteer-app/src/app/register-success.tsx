@@ -42,7 +42,7 @@ export default function RegisterSuccessScreen() {
                 </ThemedText>
 
                 <Pressable 
-                    style={styles.button}
+                    style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                     onPress={() => router.replace('/login')}
                 >
                     <ThemedText
@@ -110,4 +110,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
 
+    pressed: {
+        opacity: 0.7,
+    },
 });
