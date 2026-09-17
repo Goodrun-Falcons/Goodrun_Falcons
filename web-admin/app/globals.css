@@ -9,6 +9,19 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
+
+  /* GoodRun brand tokens */
+  --color-navy: #11183c;
+  --color-red-primary: #b9100b;
+  --color-red-dark: #8f0002;
+  --color-lavender-bg: #fbf8ff;
+  --color-pink-light: #ffdad5;
+  --color-pink-border: #e5bdb7;
+  --color-table-header: #f8f9fa;
+  --color-text-main: #1b1b22;
+  --color-text-muted: #5c403b;
+  --color-text-sub: #46464e;
+  --color-nav-inactive: rgba(227, 225, 235, 0.7);
 }
 
 @media (prefers-color-scheme: dark) {
