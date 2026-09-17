@@ -1,5 +1,5 @@
-import RegisterScreen from './register';
+import LoginScreen from './login';
 
 export default function IndexScreen() {
-  return <RegisterScreen />;
+  return <LoginScreen />;
 }
