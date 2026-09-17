@@ -5,6 +5,13 @@ import { createClient } from "@supabase/supabase-js";
 const app = Fastify({ logger: true });
 
 
+// initialise Supabase client
+const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_PUBLISH_KEY!
+  );
+
+
 export async function getAuthenticatedUser(
   authorization?: string
 ) {    
@@ -35,7 +42,18 @@ export async function getAuthenticatedUser(
         }
     
         const user = userData.user;
-        const supabaseUser = getAuthenticatedSupabase(token);
+        const supabaseUser = createClient(
+            process.env.SUPABASE_URL!,
+            process.env.SUPABASE_PUBLISHABLE_KEY!,
+            {
+              accessToken: async () => token,
+              auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+              },
+            }
+          );
+          
     
         // reject request if user is not an admin
         const { data: adminData, error: adminError } =
