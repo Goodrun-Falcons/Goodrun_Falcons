@@ -5,8 +5,10 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../../supabase/types";
+import { LiveTrackingMap } from "@/components/org/LiveTrackingMap";
 
 type Item = Database["public"]["Tables"]["items"]["Row"];
+type Route = Database["public"]["Tables"]["routes"]["Row"];
 
 function BackIcon() {
   return (
@@ -89,6 +91,7 @@ function StatusTimeline({ status }: { status: string }) {
 export default function RequestDetailPage() {
   const params = useParams<{ id: string }>();
   const [item, setItem] = useState<Item | null>(null);
+  const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -115,6 +118,41 @@ export default function RequestDetailPage() {
     }
     load();
   }, [params.id]);
+
+  useEffect(() => {
+    if (!item) return;
+
+    async function loadRoute() {
+      const { data } = await supabase
+        .from("pickups")
+        .select("*, routes(*)")
+        .eq("item_id", item!.id)
+        .not("route_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setRoute((data?.routes as Route | null) ?? null);
+    }
+    loadRoute();
+  }, [item]);
+
+  useEffect(() => {
+    if (!route?.id) return;
+
+    const channel = supabase
+      .channel(`route-${route.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "routes", filter: `id=eq.${route.id}` },
+        (payload) => setRoute((prev) => (prev ? { ...prev, ...(payload.new as Route) } : prev))
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [route?.id]);
 
   if (loading) {
     return <div className="p-6 text-[#46464e]">Loading…</div>;
@@ -186,12 +224,23 @@ export default function RequestDetailPage() {
 
         <div className="flex flex-col gap-4 rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
           <h3 className="text-[16px] font-semibold text-[#191c1d]">Live Tracking</h3>
-          {isLive ? (
+          {isLive && item.pickup_lat != null && item.pickup_lng != null ? (
+            <LiveTrackingMap
+              pickup={{ lat: item.pickup_lat, lng: item.pickup_lng }}
+              dropoff={
+                item.dropoff_lat != null && item.dropoff_lng != null
+                  ? { lat: item.dropoff_lat, lng: item.dropoff_lng }
+                  : null
+              }
+              volunteer={
+                route?.current_lat != null && route?.current_lng != null
+                  ? { lat: route.current_lat, lng: route.current_lng }
+                  : null
+              }
+            />
+          ) : isLive ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg bg-[#f3f4f5] p-10 text-center">
-              <span className="text-[14px] font-medium text-[#46464e]">Map view coming soon</span>
-              <span className="text-[12px] text-[#6b7280]">
-                Live volunteer location will appear here once Mapbox is integrated.
-              </span>
+              <span className="text-[14px] text-[#6b7280]">Pickup location unavailable for this request.</span>
             </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg bg-[#f3f4f5] p-10 text-center">

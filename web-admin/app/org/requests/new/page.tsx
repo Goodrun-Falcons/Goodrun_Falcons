@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { AddressInput } from "@/components/AddressInput";
-import { geocodeAddress } from "@/lib/geocode";
+import { geocodeAddress, type Coordinates } from "@/lib/geocode";
 
 type Urgency = "low" | "medium" | "high";
 
@@ -23,6 +23,8 @@ export default function NewRequestPage() {
   const [urgency, setUrgency] = useState<Urgency>("medium");
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropoffAddress, setDropoffAddress] = useState("");
+  const [pickupCoords, setPickupCoords] = useState<Coordinates | null>(null);
+  const [dropoffCoords, setDropoffCoords] = useState<Coordinates | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,8 +43,10 @@ export default function NewRequestPage() {
         return;
       }
 
-      const pickup = await geocodeAddress(pickupAddress);
-      const dropoff = dropoffAddress ? await geocodeAddress(dropoffAddress) : null;
+      const pickup = pickupCoords ?? (await geocodeAddress(pickupAddress));
+      const dropoff = dropoffAddress
+        ? dropoffCoords ?? (await geocodeAddress(dropoffAddress))
+        : null;
 
       const { error: insertError } = await supabase.from("items").insert({
         organisation_id: user.id,
@@ -80,12 +84,6 @@ export default function NewRequestPage() {
         <p className="text-[16px] text-[#46464e]">
           Submit a new delivery request for your organisation.
         </p>
-      </div>
-
-      <div className="rounded-lg border border-[#f3d99b] bg-[#fdf6e5] px-[17px] py-3 text-[13px] text-[#6b5300]">
-        Address lookup isn&apos;t wired up yet, so submissions won&apos;t go
-        through until the Mapbox integration lands. The rest of this form is
-        ready to use in the meantime.
       </div>
 
       <form
@@ -161,6 +159,7 @@ export default function NewRequestPage() {
           label="Pickup Address"
           value={pickupAddress}
           onChange={setPickupAddress}
+          onSelectCoordinates={setPickupCoords}
           required
         />
 
@@ -169,6 +168,7 @@ export default function NewRequestPage() {
           label="Dropoff Address (optional)"
           value={dropoffAddress}
           onChange={setDropoffAddress}
+          onSelectCoordinates={setDropoffCoords}
         />
 
         {error && <p className="text-[13px] leading-[18px] text-[#b9100b]">{error}</p>}

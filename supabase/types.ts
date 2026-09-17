@@ -65,10 +65,14 @@ export type Database = {
           created_at: string
           created_by_admin: boolean
           description: string | null
+          dropoff_lat: number | null
+          dropoff_lng: number | null
           dropoff_location: unknown
           id: string
           item_type: string
           organisation_id: string
+          pickup_lat: number | null
+          pickup_lng: number | null
           pickup_location: unknown
           quantity: number
           status: string
@@ -78,10 +82,14 @@ export type Database = {
           created_at?: string
           created_by_admin?: boolean
           description?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
           dropoff_location?: unknown
           id?: string
           item_type: string
           organisation_id: string
+          pickup_lat?: number | null
+          pickup_lng?: number | null
           pickup_location: unknown
           quantity?: number
           status?: string
@@ -91,10 +99,14 @@ export type Database = {
           created_at?: string
           created_by_admin?: boolean
           description?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
           dropoff_location?: unknown
           id?: string
           item_type?: string
           organisation_id?: string
+          pickup_lat?: number | null
+          pickup_lng?: number | null
           pickup_location?: unknown
           quantity?: number
           status?: string
@@ -217,6 +229,8 @@ export type Database = {
       routes: {
         Row: {
           created_at: string
+          current_lat: number | null
+          current_lng: number | null
           current_location: unknown
           ended_at: string | null
           id: string
@@ -226,6 +240,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          current_lat?: number | null
+          current_lng?: number | null
           current_location?: unknown
           ended_at?: string | null
           id?: string
@@ -235,6 +251,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          current_lat?: number | null
+          current_lng?: number | null
           current_location?: unknown
           ended_at?: string | null
           id?: string
