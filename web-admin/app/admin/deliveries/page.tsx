@@ -4,11 +4,11 @@ import { useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Status = "in-transit" | "delayed" | "unassigned" | "completed";
+type Status = "in-transit" | "delayed" | "unassigned" | "completed" | "pending pickup";
 
 interface ActiveDelivery {
   id: string;
-  status: "in-transit" | "delayed";
+  status: "in-transit" | "delayed" | "pending pickup";
   title: string;
   estArrival: string;
   arrivalUrgent?: boolean;
@@ -35,7 +35,7 @@ const ACTIVE_DELIVERIES: ActiveDelivery[] = [
   },
   {
     id: "#MP-1025",
-    status: "in-transit",
+    status: "pending pickup",
     title: "Surgical Kits - Royal Melbourne",
     estArrival: "Oct 12 • 15:15",
     driver: "A. Chen",
@@ -113,6 +113,12 @@ const STATUS_CONFIG: Record<
     bg: "bg-[rgba(185,16,11,0.1)]",
     text: "text-[#B9100B]",
     label: "Delayed",
+  },
+  "pending pickup": {
+    dot: "bg-[#B9100B]",
+    bg: "bg-[rgba(185,16,11,0.1)]",
+    text: "text-[#B9100B]",
+    label: "Pending Pickup",
   },
   unassigned: {
     dot: "bg-[#B9100B]",

@@ -1,0 +1,11 @@
+{
+  "name": "goodrun-falcons",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix web-admin",
+    "build": "npm run build --prefix web-admin",
+    "start": "npm run start --prefix web-admin",
+    "dev:web": "npm run dev --prefix web-admin",
+    "dev:app": "npm run dev --prefix volunteer-app"
+  }
+}
