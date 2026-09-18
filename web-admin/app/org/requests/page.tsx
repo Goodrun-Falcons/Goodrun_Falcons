@@ -83,8 +83,36 @@ function MyRequestsContent() {
 
       setItems(orgItems ?? []);
       setLoading(false);
+
+      const channel = supabase
+        .channel(`org-items-${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "items", filter: `organisation_id=eq.${user.id}` },
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              setItems((prev) => [payload.new as Item, ...prev]);
+            } else if (payload.eventType === "UPDATE") {
+              setItems((prev) =>
+                prev.map((item) => (item.id === (payload.new as Item).id ? (payload.new as Item) : item))
+              );
+            } else if (payload.eventType === "DELETE") {
+              setItems((prev) => prev.filter((item) => item.id !== (payload.old as Item).id));
+            }
+          }
+        )
+        .subscribe();
+
+      return channel;
     }
-    load();
+
+    const channelPromise = load();
+
+    return () => {
+      channelPromise.then((channel) => {
+        if (channel) supabase.removeChannel(channel);
+      });
+    };
   }, []);
 
   const visibleItems = items.filter((item) => matchesFilter(item, filter));
