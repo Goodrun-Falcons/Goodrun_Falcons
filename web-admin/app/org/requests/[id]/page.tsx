@@ -33,6 +33,8 @@ function urgencyBadge(urgency: string) {
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; text: string; label: string }> = {
     pending: { bg: "#e7e8e9", text: "#46464e", label: "Pending" },
+    approved: { bg: "#e7e8e9", text: "#46464e", label: "Approved" },
+    rejected: { bg: "#ffdad6", text: "#93000a", label: "Rejected" },
     accepted: { bg: "#e7e8e9", text: "#46464e", label: "Matched" },
     in_transit: { bg: "#dd3022", text: "#ffffff", label: "In Transit" },
     delivered: { bg: "#d8f6e3", text: "#0f5132", label: "Delivered" },
@@ -50,6 +52,7 @@ function statusBadge(status: string) {
 
 const STEPS = [
   { key: "pending", label: "Submitted" },
+  { key: "approved", label: "Approved" },
   { key: "accepted", label: "Matched" },
   { key: "in_transit", label: "In Transit" },
   { key: "delivered", label: "Delivered" },
@@ -209,7 +212,13 @@ export default function RequestDetailPage() {
       </div>
 
       <div className="w-full rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
-        <StatusTimeline status={item.status} />
+        {item.status === "rejected" ? (
+          <p className="text-[14px] text-[#93000a]">
+            This request was reviewed and rejected by an admin.
+          </p>
+        ) : (
+          <StatusTimeline status={item.status} />
+        )}
       </div>
 
       <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">

@@ -31,6 +31,8 @@ function urgencyBadge(urgency: string) {
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; text: string; label: string }> = {
     pending: { bg: "#e7e8e9", text: "#46464e", label: "Pending" },
+    approved: { bg: "#e7e8e9", text: "#46464e", label: "Approved" },
+    rejected: { bg: "#ffdad6", text: "#93000a", label: "Rejected" },
     accepted: { bg: "#e7e8e9", text: "#46464e", label: "Matched" },
     in_transit: { bg: "#dd3022", text: "#ffffff", label: "In Transit" },
     delivered: { bg: "#d8f6e3", text: "#0f5132", label: "Delivered" },
@@ -49,7 +51,12 @@ function statusBadge(status: string) {
 function matchesFilter(item: Item, filter: Filter) {
   if (filter === "all") return true;
   if (filter === "delivered") return item.status === "delivered";
-  return item.status === "pending" || item.status === "accepted" || item.status === "in_transit";
+  return (
+    item.status === "pending" ||
+    item.status === "approved" ||
+    item.status === "accepted" ||
+    item.status === "in_transit"
+  );
 }
 
 export default function MyRequestsPage() {

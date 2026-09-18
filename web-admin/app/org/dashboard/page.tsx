@@ -39,6 +39,8 @@ function urgencyBadge(urgency: string) {
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; text: string; label: string }> = {
     pending: { bg: "#e7e8e9", text: "#46464e", label: "Pending" },
+    approved: { bg: "#e7e8e9", text: "#46464e", label: "Approved" },
+    rejected: { bg: "#ffdad6", text: "#93000a", label: "Rejected" },
     accepted: { bg: "#e7e8e9", text: "#46464e", label: "Matched" },
     in_transit: { bg: "#dd3022", text: "#ffffff", label: "In Transit" },
     delivered: { bg: "#d8f6e3", text: "#0f5132", label: "Delivered" },
@@ -90,7 +92,9 @@ export default function OrgDashboardPage() {
   startOfMonth.setHours(0, 0, 0, 0);
 
   const requestsThisMonth = items.filter((i) => new Date(i.created_at) >= startOfMonth).length;
-  const awaitingPickupCount = items.filter((i) => i.status === "pending" || i.status === "accepted").length;
+  const awaitingPickupCount = items.filter(
+    (i) => i.status === "pending" || i.status === "approved" || i.status === "accepted"
+  ).length;
   const inTransitCount = items.filter((i) => i.status === "in_transit").length;
   const deliveredCount = items.filter((i) => i.status === "delivered").length;
   const activeCount = awaitingPickupCount + inTransitCount;
