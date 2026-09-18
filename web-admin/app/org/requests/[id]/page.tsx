@@ -120,6 +120,21 @@ export default function RequestDetailPage() {
   }, [params.id]);
 
   useEffect(() => {
+    const channel = supabase
+      .channel(`item-${params.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "items", filter: `id=eq.${params.id}` },
+        (payload) => setItem((prev) => (prev ? { ...prev, ...(payload.new as Item) } : prev))
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [params.id]);
+
+  useEffect(() => {
     if (!item) return;
 
     async function loadRoute() {
