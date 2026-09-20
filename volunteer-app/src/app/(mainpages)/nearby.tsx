@@ -54,6 +54,10 @@ export default function NearbyScreen() {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [radiusKm, setRadiusKm] = useState<number | null>(RADIUS_OPTIONS[0].km);
+  // The sheet's snap points are a % of the map area, not the full window —
+  // the docked header above the map shortens that area, so measure it directly
+  // instead of assuming it's the whole screen.
+  const [mapAreaHeight, setMapAreaHeight] = useState(windowHeight);
 
   const tasks = mockTasks
     .filter((task) => radiusKm === null || task.distanceKm <= radiusKm)
@@ -69,9 +73,9 @@ export default function NearbyScreen() {
       .map((task) => ({ ...task.orgCoords, color: '#8a8d99' })),
   ];
 
-  const collapsedHeight = Math.round(windowHeight * SHEET_COLLAPSED_RATIO);
-  const defaultHeight = Math.round(windowHeight * SHEET_DEFAULT_RATIO);
-  const expandedHeight = Math.round(windowHeight * SHEET_EXPANDED_RATIO);
+  const collapsedHeight = Math.round(mapAreaHeight * SHEET_COLLAPSED_RATIO);
+  const defaultHeight = Math.round(mapAreaHeight * SHEET_DEFAULT_RATIO);
+  const expandedHeight = Math.round(mapAreaHeight * SHEET_EXPANDED_RATIO);
   const snapPoints = [collapsedHeight, defaultHeight, expandedHeight];
 
   const sheetHeight = useSharedValue(defaultHeight);
@@ -105,30 +109,25 @@ export default function NearbyScreen() {
       <ThemedView type="canvasNavy" style={styles.screen}>
         <StatusBar style="light" />
 
-        <InteractiveMap markers={mapMarkers} style={styles.mapImage} />
-
+        {/*
+          A native WebView composites as its own always-on-top surface on iOS/Android
+          and ignores normal sibling paint order (even zIndex/elevation), so this bar
+          can't float translucently over the map the way it can over a plain image —
+          it's docked above the map instead, in normal flex flow, so the two never
+          overlap in the native view hierarchy.
+        */}
         <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
           <View style={styles.topBarContent}>
-            <View style={styles.titleRow}>
-              <ThemedText style={styles.title} themeColor="primaryText">
-                Nearby runs
+            <View style={styles.locationBadge}>
+              <SymbolView
+                name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
+                tintColor={theme.primaryText}
+                size={11}
+              />
+              <ThemedText style={styles.locationBadgeLabel} themeColor="primaryText">
+                {SERVICE_AREA}
               </ThemedText>
-              <View style={styles.locationBadge}>
-                <SymbolView
-                  name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
-                  tintColor={theme.primaryText}
-                  size={11}
-                />
-                <ThemedText style={styles.locationBadgeLabel} themeColor="primaryText">
-                  {SERVICE_AREA}
-                </ThemedText>
-              </View>
             </View>
-            <ThemedText style={styles.subtitle} themeColor="primaryText">
-              {radiusKm === null
-                ? 'Showing all runs, sorted by distance'
-                : `Showing runs within ${radiusKm} km of your location`}
-            </ThemedText>
 
             <View style={styles.filterRow}>
               {RADIUS_OPTIONS.map((option) => {
@@ -159,28 +158,42 @@ export default function NearbyScreen() {
           </View>
         </View>
 
-        <Animated.View style={[styles.sheet, Elevation.level2, animatedSheetStyle]}>
-          <GestureDetector gesture={panGesture}>
-            <View style={styles.sheetHandleArea}>
-              <View style={styles.sheetHandle} />
-            </View>
-          </GestureDetector>
-          <FlatList
-            style={styles.list}
-            alwaysBounceHorizontal={false}
-            directionalLockEnabled
-            data={tasks}
-            keyExtractor={(task) => task.id}
-            renderItem={({ item }) => <TaskCard task={item} />}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <ThemedText style={styles.emptyState} themeColor="mute">
-                No runs within this radius — try widening your search.
-              </ThemedText>
-            }
-          />
-        </Animated.View>
+        <View
+          style={styles.mapArea}
+          onLayout={(event) => {
+            const height = event.nativeEvent.layout.height;
+            setMapAreaHeight(height);
+            // Reanimated shared value: `.value` assignment is the correct way to
+            // update it and doesn't participate in React's render/effect purity model.
+            // eslint-disable-next-line react-hooks/immutability
+            sheetHeight.value = Math.round(height * SHEET_DEFAULT_RATIO);
+          }}
+        >
+          <InteractiveMap markers={mapMarkers} style={styles.mapImage} />
+
+          <Animated.View style={[styles.sheet, Elevation.level2, animatedSheetStyle]}>
+            <GestureDetector gesture={panGesture}>
+              <View style={styles.sheetHandleArea}>
+                <View style={styles.sheetHandle} />
+              </View>
+            </GestureDetector>
+            <FlatList
+              style={styles.list}
+              alwaysBounceHorizontal={false}
+              directionalLockEnabled
+              data={tasks}
+              keyExtractor={(task) => task.id}
+              renderItem={({ item }) => <TaskCard task={item} />}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              contentContainerStyle={styles.listContent}
+              ListEmptyComponent={
+                <ThemedText style={styles.emptyState} themeColor="mute">
+                  No runs within this radius — try widening your search.
+                </ThemedText>
+              }
+            />
+          </Animated.View>
+        </View>
       </ThemedView>
     </GestureHandlerRootView>
   );
@@ -188,6 +201,9 @@ export default function NearbyScreen() {
 
 const styles = StyleSheet.create({
   screen: {
+    flex: 1,
+  },
+  mapArea: {
     flex: 1,
   },
   mapImage: {
@@ -207,38 +223,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.md,
   },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    ...Typography.displayMd,
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
   locationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: Spacing.half,
-    backgroundColor: 'rgba(20,26,67,0.75)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.xs,
     paddingVertical: Spacing.half + 1,
+    marginBottom: Spacing.sm,
   },
   locationBadgeLabel: {
     ...Typography.caption,
     opacity: 0.9,
-  },
-  subtitle: {
-    ...Typography.bodySm,
-    opacity: 0.9,
-    marginTop: 2,
-    marginBottom: Spacing.md,
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
   },
   filterRow: {
     flexDirection: 'row',

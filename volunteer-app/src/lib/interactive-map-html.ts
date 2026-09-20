@@ -27,7 +27,8 @@ export function buildInteractiveMapHtml(markers: MapMarker[]): string | null {
     <link href="https://api.mapbox.com/mapbox-gl-js/v${MAPBOX_GL_VERSION}/mapbox-gl.css" rel="stylesheet" />
     <script src="https://api.mapbox.com/mapbox-gl-js/v${MAPBOX_GL_VERSION}/mapbox-gl.js"></script>
     <style>
-      html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #141a43; }
+      html, body { margin: 0; padding: 0; background: #141a43; }
+      #map { position: fixed; inset: 0; }
       .mapboxgl-ctrl-logo { opacity: 0.6; }
     </style>
   </head>
@@ -43,6 +44,12 @@ export function buildInteractiveMapHtml(markers: MapMarker[]): string | null {
         attributionControl: false,
       });
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+
+      // The WebView can report a stale/incorrect size to mapbox-gl on first paint
+      // (its native container settles asynchronously), so keep the canvas synced
+      // to the #map element's actual size for as long as the page is open.
+      map.on('load', () => map.resize());
+      new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
 
       const markers = ${markersJson};
       const bounds = new mapboxgl.LngLatBounds();

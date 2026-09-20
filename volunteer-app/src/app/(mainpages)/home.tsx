@@ -64,9 +64,8 @@ export default function HomeScreen() {
         >
           <View style={styles.headerContent}>
             <View style={styles.headerTopRow}>
-              {/* Temporary logo — swap for the client's final asset once supplied. */}
               <Image
-                source={require('@/assets/images/logo_temp.png')}
+                source={require('@/assets/images/medical-pantry-logo-horizontal-white.png')}
                 style={styles.brandLogo}
                 contentFit="contain"
               />
@@ -232,7 +231,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brandLogo: {
-    width: 122,
+    width: 90,
     height: 28,
   },
   bellButton: {
