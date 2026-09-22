@@ -1,5 +1,6 @@
 import "dotenv/config";
 import Fastify from "fastify";
+import type { FastifyInstance } from "fastify";
 import { createClient } from "@supabase/supabase-js";
 
 const app = Fastify({ logger: true });
@@ -8,7 +9,7 @@ const app = Fastify({ logger: true });
 // initialise Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_PUBLISH_KEY!
+  process.env.SUPABASE_PUBLISHABLE_KEY!
 );
 
 
@@ -45,7 +46,7 @@ export default async function volunteerProfileAPI(
 
     const supabaseUser = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISH_KEY!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
       {
         accessToken: async() => token
       }
@@ -132,7 +133,7 @@ export default async function volunteerProfileAPI(
 
     const supabaseUser = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISH_KEY!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
       {
         accessToken: async() => token
       }
@@ -308,8 +309,8 @@ export default async function volunteerProfileAPI(
       // find volunteer entries in database
       const { data: volunteerData, error: volunteerError } = await supabase
       .from("volunteers")
-      .eq("id", authData.user.id)
       .select("status")
+      .eq("id", authData.user.id)
       .single();
 
       if (volunteerError) {
