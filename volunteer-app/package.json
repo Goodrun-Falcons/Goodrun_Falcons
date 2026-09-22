@@ -27,14 +27,19 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
+    "react-native-webview": "13.16.1",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@react-native/jest-preset": "^0.86.3",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
+    "jest": "^30.5.1",
+    "jest-expo": "^57.0.5",
     "lint-staged": "^17.4.1",
     "prettier": "^3.9.6",
     "typescript": "~6.0.3"
@@ -47,7 +52,11 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "jest"
+  },
+  "jest": {
+    "preset": "jest-expo"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
