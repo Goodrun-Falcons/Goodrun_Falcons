@@ -1,9 +1,43 @@
 import { StyleSheet, View , Image ,TextInput, Pressable } from 'react-native';
+import { useState } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { BrandColors, Spacing, Radius } from '@/constants/theme';
 import { router } from 'expo-router';
 
+const URL = 'xxx'
+
 export default function LoginScreen() {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+
+    async function handleLogin() {
+        if(email == '' || password == ''){
+            return;
+        }
+
+        const loginData = {
+            email: email.trim(),
+            password: password,
+        };
+
+        const loginRequest = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(loginData)
+        }
+
+        const response = await fetch(URL, loginRequest);
+        const data = await response.json();
+
+        if (response.ok) {
+            router.replace('/home');
+            return;
+        }
+
+        if (response.status === 403) {
+            return;
+        }
+    }
 
     return(
         <View style = {styles.container}>
@@ -24,7 +58,8 @@ export default function LoginScreen() {
                     </ThemedText>
 
                     <TextInput 
-                        placeholder='xxx@example.com'
+                        value = {email}
+                        onChangeText={setEmail}
                         keyboardType="email-address"
                         style={styles.input}
                     />
@@ -39,6 +74,8 @@ export default function LoginScreen() {
                     </ThemedText>
 
                     <TextInput 
+                        value = {password}
+                        onChangeText={setPassword}
                         secureTextEntry
                         style={styles.input}
                     />
@@ -59,7 +96,7 @@ export default function LoginScreen() {
 
                     <Pressable 
                         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-                        onPress={() => router.push('/home')}
+                        onPress={handleLogin}
                     >
                         <ThemedText
                             type= 'smallBold'
