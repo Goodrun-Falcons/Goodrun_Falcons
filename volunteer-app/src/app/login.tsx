@@ -3,17 +3,23 @@ import { useState } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { BrandColors, Spacing, Radius } from '@/constants/theme';
 import { router } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 
-const URL = 'xxx'
+const URL = 'https://goodrun-backend.onrender.com/volunteers/login'
 
 export default function LoginScreen() {
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
 
     async function handleLogin() {
-        if(email == '' || password == ''){
+        if(email.trim() === '' || password === ''){
+            setErrorMessage('Please enter your email address and password.');
             return;
         }
+
+        setErrorMessage('');
 
         const loginData = {
             email: email.trim(),
@@ -35,6 +41,17 @@ export default function LoginScreen() {
         }
 
         if (response.status === 403) {
+            setErrorMessage('Your account is not active yet.');
+            return;
+        }
+
+        if (response.status === 400) {
+            setErrorMessage('Invalid email address or password.');
+            return;
+        }
+
+        if (response.status === 500) {
+            setErrorMessage('Unable to log in. Please try again later.');
             return;
         }
     }
@@ -58,6 +75,8 @@ export default function LoginScreen() {
                     </ThemedText>
 
                     <TextInput 
+                        autoCapitalize="none"
+                        autoCorrect={false}
                         value = {email}
                         onChangeText={setEmail}
                         keyboardType="email-address"
@@ -80,6 +99,20 @@ export default function LoginScreen() {
                         style={styles.input}
                     />
                 </View>
+
+                {errorMessage !== '' && (
+                    <View style={styles.errorBox}>
+                        <MaterialIcons
+                        name="error-outline"
+                        size={14}
+                        color={BrandColors.red}
+                        />
+
+                        <ThemedText style={styles.errorText}>
+                        {errorMessage}
+                        </ThemedText>
+                    </View>
+                )}
 
                 <View style={styles.buttonRow}>
                     <Pressable 
@@ -184,5 +217,26 @@ const styles = StyleSheet.create({
 
     pressed: {
         opacity: 0.7,
+    },
+
+    errorBox: {
+        minHeight: 26,
+        marginTop: Spacing.sm,
+        paddingHorizontal: Spacing.sm,
+
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.xs,
+
+        borderWidth: 1,
+        borderColor: BrandColors.red,
+        borderRadius: 4,
+        backgroundColor: 'rgba(220, 40, 45, 0.1)',
+    },
+
+    errorText: {
+        color: BrandColors.red,
+        fontSize: 11,
     },
 });
