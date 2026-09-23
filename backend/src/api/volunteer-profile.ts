@@ -189,14 +189,16 @@ export default async function volunteerProfileAPI(
       // raise error when basic data are empty
       if (!email || !password || !fullName) {
         return reply.status(400).send({
-          error: "email, password and fullName are required",
+          error: "MISSING_CREDENTIAL",
+          message: "email, password and fullName are required",
         });
       }
 
       // password security check
       if (password.length < 6) {
         return reply.status(400).send({
-          error: "Password must be at least 6 characters long",
+          error: "WRONG_FORMAT",
+          message: "Password must be at least 6 characters long",
         });
       }
 
@@ -216,7 +218,8 @@ export default async function volunteerProfileAPI(
 
       if (!authData.user) {
         return reply.status(500).send({
-          error: "Failed to create user account",
+          error: "FAIL_CREATE",
+          message: "Failed to create user account",
         });
       }
 
@@ -279,7 +282,8 @@ export default async function volunteerProfileAPI(
       // raise error when basic data are empty
       if (!email || !password) {
         return reply.status(400).send({
-          error: "email and password are both required"
+          error: "MISSING_CREDENTIAL",
+          message: "email and password are both required"
         });
       }
 
@@ -295,13 +299,14 @@ export default async function volunteerProfileAPI(
       // handle errors
       if (authError) {
           return reply.status(400).send({
-            error: authError.message,
+            message: authError.message,
           });
         }
   
       if (!authData.user) {
           return reply.status(500).send({
-            error: "User not found",
+            error: "USER_NOT_FOUND",
+            message: "User not found",
           });
         }
       
@@ -322,11 +327,13 @@ export default async function volunteerProfileAPI(
       // check for volunteer status
       if (volunteerData.status === "pending_vetting") {
         return reply.status(403).send({
-          error: "Your information is awaiting vetting! Please wait for notification",
+          error: "AWAITING_VETTING",
+          message: "Your information is awaiting vetting! Please wait for notification",
         });
       } else if (volunteerData.status === "inactive") {
         return reply.status(403).send({
-          error: "Account not usable",
+          error: "INACTIVE",
+          message: "Account not usable",
         });
       } else if (volunteerData.status === "active") {
 
