@@ -1,4 +1,4 @@
-import { StyleSheet, View , Image ,TextInput, Pressable } from 'react-native';
+import { StyleSheet, View , Image ,TextInput, Pressable, ActivityIndicator, } from 'react-native';
 import { useState } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { BrandColors, Spacing, Radius } from '@/constants/theme';
@@ -12,6 +12,7 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     async function handleLogin() {
         if(email.trim() === '' || password === ''){
@@ -20,6 +21,7 @@ export default function LoginScreen() {
         }
 
         setErrorMessage('');
+        setIsLoading(true);
 
         const loginData = {
             email: email.trim(),
@@ -32,27 +34,45 @@ export default function LoginScreen() {
             body: JSON.stringify(loginData)
         }
 
-        const response = await fetch(URL, loginRequest);
-        const data = await response.json();
+        try {
+            const response = await fetch(URL, loginRequest);
+            const data = await response.json();
 
-        if (response.ok) {
-            router.replace('/home');
-            return;
-        }
+            if (response.ok) {
+                router.replace('/home');
+                return;
+            }
 
-        if (response.status === 403) {
-            setErrorMessage('Your account is not active yet.');
-            return;
-        }
+            if (response.status === 403) {
+                if (data.error === 'AWAITING_VETTING') {
+                    setErrorMessage(
+                    'Your account is still awaiting approval.'
+                    );
+                    return;
+                }
 
-        if (response.status === 400) {
-            setErrorMessage('Invalid email address or password.');
-            return;
-        }
+                if (data.error === 'INACTIVE') {
+                    setErrorMessage(
+                    'Your account has been rejected or deactivated.'
+                    );
+                    return;
+                }
+            }
 
-        if (response.status === 500) {
-            setErrorMessage('Unable to log in. Please try again later.');
-            return;
+            if (response.status === 400) {
+                setErrorMessage('Invalid email address or password.');
+                return;
+            }
+
+            if (response.status === 500) {
+                setErrorMessage('Unable to log in. Please try again later.');
+                return;
+            }
+            
+        } catch (error) {
+            setErrorMessage('Unable to connect to the server. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     }
 
@@ -128,15 +148,23 @@ export default function LoginScreen() {
                     </Pressable>
 
                     <Pressable 
-                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                        disabled={isLoading}
+                        style={({ pressed }) => [styles.button, (pressed || isLoading) && styles.pressed]}
                         onPress={handleLogin}
                     >
-                        <ThemedText
-                            type= 'smallBold'
-                            themeColor="secondaryText"
-                        >
-                            Log in
-                        </ThemedText>
+                        {isLoading ? (
+                            <ActivityIndicator
+                                size="small"
+                                color={BrandColors.white}
+                            />
+                        ) : (
+                            <ThemedText
+                                type="smallBold"
+                                themeColor="secondaryText"
+                            >
+                                Log in
+                            </ThemedText>
+                        )}
                     </Pressable>
                 </View>
             </View>
