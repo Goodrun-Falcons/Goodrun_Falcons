@@ -361,9 +361,11 @@ function PendingRow({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
       className="grid w-full grid-cols-12 cursor-pointer items-center gap-4 px-3 py-3 text-left transition-colors hover:bg-[rgba(185,16,11,0.02)]"
       style={{
         background: "#FFFFFF",
@@ -406,7 +408,7 @@ function PendingRow({
           Assign Driver
         </button>
       </div>
-    </button>
+    </div>
   );
 }
 
