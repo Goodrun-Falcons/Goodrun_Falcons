@@ -1,9 +1,103 @@
-import { StyleSheet, View , Image ,TextInput, Pressable } from 'react-native';
+import { StyleSheet, View , Image ,TextInput, Pressable, ActivityIndicator, } from 'react-native';
+import { useState } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { BrandColors, Spacing, Radius } from '@/constants/theme';
 import { router } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
+
+const URL = 'https://goodrun-backend.onrender.com/volunteers/login'
 
 export default function LoginScreen() {
+
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    async function handleLogin() {
+        if(email.trim() === '' || password === ''){
+            setErrorMessage('Please enter your email address and password.');
+            return;
+        }
+
+        setErrorMessage('');
+        setIsLoading(true);
+
+        const loginData = {
+            email: email.trim(),
+            password: password,
+        };
+
+        const loginRequest = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(loginData)
+        }
+
+        try {
+            const response = await fetch(URL, loginRequest);
+            const data = await response.json();
+
+            if (response.ok) {
+                const accessToken = data.session?.accessToken;
+                const refreshToken = data.session?.refreshToken;
+
+                if (!accessToken || !refreshToken) {
+                    setErrorMessage('Login succeeded, but session data is missing.');
+                    return;
+                }
+
+                await SecureStore.setItemAsync(
+                    'accessToken',
+                    accessToken
+                );
+
+                await SecureStore.setItemAsync(
+                    'refreshToken',
+                    refreshToken
+                );
+
+                router.replace('/home');
+                return;
+            }
+
+            if (response.status === 403) {
+                if (data.error === 'AWAITING_VETTING') {
+                    setErrorMessage(
+                    'Your account is still awaiting approval.'
+                    );
+                    return;
+                }
+
+                if (data.error === 'INACTIVE') {
+                    setErrorMessage(
+                    'Your account has been rejected or deactivated.'
+                    );
+                    return;
+                }
+            }
+
+            if (response.status === 400) {
+                setErrorMessage('Invalid email address or password.');
+                return;
+            }
+
+            if (response.status === 500) {
+                setErrorMessage('Unable to log in. Please try again later.');
+                return;
+            }
+
+            setErrorMessage(
+                'Unable to log in. Please try again later.'
+            );
+
+        } catch (error) {
+            setErrorMessage('Unable to connect to the server. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    }
 
     return(
         <View style = {styles.container}>
@@ -13,60 +107,104 @@ export default function LoginScreen() {
                 style = {styles.logo}
             />
 
-            <View style={styles.form}>
+            <View style = {styles.form}>
 
-                <View style={styles.loginForm}>
+                <View style = {styles.loginForm}>
                     <ThemedText
-                        type= 'smallBold'
-                        themeColor="secondaryText"
+                        type = 'smallBold'
+                        themeColor = "secondaryText"
                     >
                         Email Address
                     </ThemedText>
 
                     <TextInput 
-                        placeholder='xxx@example.com'
-                        keyboardType="email-address"
-                        style={styles.input}
+                        autoCapitalize = "none"
+                        autoCorrect = {false}
+                        value = {email}
+                        onChangeText = {setEmail}
+                        keyboardType = "email-address"
+                        style = {styles.input}
                     />
                 </View>
                 
-                <View style={styles.loginForm}>
+                <View style = {styles.loginForm}>
                     <ThemedText
-                        type= 'smallBold'
-                        themeColor="secondaryText"
+                        type = 'smallBold'
+                        themeColor = "secondaryText"
                     >
                         Password
                     </ThemedText>
 
                     <TextInput 
+                        value = {password}
+                        onChangeText = {setPassword}
                         secureTextEntry
-                        style={styles.input}
+                        style = {styles.input}
                     />
                 </View>
 
-                <View style={styles.buttonRow}>
-                    <Pressable 
-                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-                        onPress={() => router.push('/register')}
+                <View style = {styles.forgotPassword}>
+                    <Pressable
+                        disabled = {isLoading}
+                        onPress={() => router.push('/forgot-password')}
                     >
                         <ThemedText
-                            type= 'smallBold'
-                            themeColor="secondaryText"
+                            type = "smallBold"
+                            themeColor = "secondaryText"
+                            style = {styles.forgotPasswordText}
+                        >
+                            Forgot Password?
+                        </ThemedText>
+                    </Pressable>
+                </View>
+
+                {errorMessage !== '' && (
+                    <View style = {styles.errorBox}>
+                        <MaterialIcons
+                        name = "error-outline"
+                        size = {14}
+                        color = {BrandColors.red}
+                        />
+
+                        <ThemedText style = {styles.errorText}>
+                        {errorMessage}
+                        </ThemedText>
+                    </View>
+                )}
+
+                <View style = {styles.buttonRow}>
+
+                    <Pressable
+                        disabled = {isLoading}
+                        style = {({ pressed }) => [styles.button, (pressed || isLoading) && styles.pressed,]}
+                        onPress = {() => router.push('/register')}
+                    >
+                        <ThemedText
+                            type = "smallBold"
+                            themeColor = "secondaryText"
                         >
                             Sign up
                         </ThemedText>
                     </Pressable>
 
                     <Pressable 
-                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-                        onPress={() => router.push('/home')}
+                        disabled = {isLoading}
+                        style = {({ pressed }) => [styles.button, (pressed || isLoading) && styles.pressed]}
+                        onPress = {handleLogin}
                     >
-                        <ThemedText
-                            type= 'smallBold'
-                            themeColor="secondaryText"
-                        >
-                            Log in
-                        </ThemedText>
+                        {isLoading ? (
+                            <ActivityIndicator
+                                size = "small"
+                                color = {BrandColors.white}
+                            />
+                        ) : (
+                            <ThemedText
+                                type = "smallBold"
+                                themeColor = "secondaryText"
+                            >
+                                Log in
+                            </ThemedText>
+                        )}
                     </Pressable>
                 </View>
             </View>
@@ -75,14 +213,14 @@ export default function LoginScreen() {
 
             <View style = {styles.teamInfo}>
                 <ThemedText
-                    type= 'smallBold'
-                    themeColor="secondaryText"
+                    type = 'smallBold'
+                    themeColor ="secondaryText"
                 >
                     Project GoodRun
                 </ThemedText>
                 <ThemedText
-                    type= 'small'
-                    themeColor="secondaryText"
+                    type = 'small'
+                    themeColor = "secondaryText"
                 >
                     by Team Falcons
                 </ThemedText>
@@ -147,5 +285,34 @@ const styles = StyleSheet.create({
 
     pressed: {
         opacity: 0.7,
+    },
+
+    errorBox: {
+        minHeight: 26,
+        marginTop: Spacing.sm,
+        paddingHorizontal: Spacing.sm,
+
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.xs,
+
+        borderWidth: 1,
+        borderColor: BrandColors.red,
+        borderRadius: 4,
+        backgroundColor: 'rgba(220, 40, 45, 0.1)',
+    },
+
+    errorText: {
+        color: BrandColors.red,
+        fontSize: 11,
+    },
+
+    forgotPassword: {
+        alignItems: "flex-end",
+    },
+
+    forgotPasswordText: {
+        textDecorationLine: 'underline',
     },
 });
