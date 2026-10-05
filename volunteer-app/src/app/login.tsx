@@ -40,6 +40,24 @@ export default function LoginScreen() {
             const data = await response.json();
 
             if (response.ok) {
+                const accessToken = data.session?.accessToken;
+                const refreshToken = data.session?.refreshToken;
+
+                if (!accessToken || !refreshToken) {
+                    setErrorMessage('Login succeeded, but session data is missing.');
+                    return;
+                }
+
+                await SecureStore.setItemAsync(
+                    'accessToken',
+                    accessToken
+                );
+
+                await SecureStore.setItemAsync(
+                    'refreshToken',
+                    refreshToken
+                );
+
                 router.replace('/home');
                 return;
             }
@@ -69,6 +87,10 @@ export default function LoginScreen() {
                 setErrorMessage('Unable to log in. Please try again later.');
                 return;
             }
+
+            setErrorMessage(
+                'Unable to log in. Please try again later.'
+            );
 
         } catch (error) {
             setErrorMessage('Unable to connect to the server. Please try again.');
@@ -124,13 +146,14 @@ export default function LoginScreen() {
                 <View style = {styles.forgotPassword}>
                     <Pressable
                         disabled = {isLoading}
+                        onPress={() => router.push('/forgot-password')}
                     >
                         <ThemedText
                             type = "smallBold"
                             themeColor = "secondaryText"
                             style = {styles.forgotPasswordText}
                         >
-                            Forgot Password?(not implemented yet)
+                            Forgot Password?
                         </ThemedText>
                     </Pressable>
                 </View>
