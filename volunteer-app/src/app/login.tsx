@@ -4,6 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { BrandColors, Spacing, Radius } from '@/constants/theme';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 
 const URL = 'https://goodrun-backend.onrender.com/volunteers/login'
 
@@ -68,7 +69,7 @@ export default function LoginScreen() {
                 setErrorMessage('Unable to log in. Please try again later.');
                 return;
             }
-            
+
         } catch (error) {
             setErrorMessage('Unable to connect to the server. Please try again.');
         } finally {
@@ -84,83 +85,99 @@ export default function LoginScreen() {
                 style = {styles.logo}
             />
 
-            <View style={styles.form}>
+            <View style = {styles.form}>
 
-                <View style={styles.loginForm}>
+                <View style = {styles.loginForm}>
                     <ThemedText
-                        type= 'smallBold'
-                        themeColor="secondaryText"
+                        type = 'smallBold'
+                        themeColor = "secondaryText"
                     >
                         Email Address
                     </ThemedText>
 
                     <TextInput 
-                        autoCapitalize="none"
-                        autoCorrect={false}
+                        autoCapitalize = "none"
+                        autoCorrect = {false}
                         value = {email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        style={styles.input}
+                        onChangeText = {setEmail}
+                        keyboardType = "email-address"
+                        style = {styles.input}
                     />
                 </View>
                 
-                <View style={styles.loginForm}>
+                <View style = {styles.loginForm}>
                     <ThemedText
-                        type= 'smallBold'
-                        themeColor="secondaryText"
+                        type = 'smallBold'
+                        themeColor = "secondaryText"
                     >
                         Password
                     </ThemedText>
 
                     <TextInput 
                         value = {password}
-                        onChangeText={setPassword}
+                        onChangeText = {setPassword}
                         secureTextEntry
-                        style={styles.input}
+                        style = {styles.input}
                     />
                 </View>
 
+                <View style = {styles.forgotPassword}>
+                    <Pressable
+                        disabled = {isLoading}
+                    >
+                        <ThemedText
+                            type = "smallBold"
+                            themeColor = "secondaryText"
+                            style = {styles.forgotPasswordText}
+                        >
+                            Forgot Password?(not implemented yet)
+                        </ThemedText>
+                    </Pressable>
+                </View>
+
                 {errorMessage !== '' && (
-                    <View style={styles.errorBox}>
+                    <View style = {styles.errorBox}>
                         <MaterialIcons
-                        name="error-outline"
-                        size={14}
-                        color={BrandColors.red}
+                        name = "error-outline"
+                        size = {14}
+                        color = {BrandColors.red}
                         />
 
-                        <ThemedText style={styles.errorText}>
+                        <ThemedText style = {styles.errorText}>
                         {errorMessage}
                         </ThemedText>
                     </View>
                 )}
 
-                <View style={styles.buttonRow}>
-                    <Pressable 
-                        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-                        onPress={() => router.push('/register')}
+                <View style = {styles.buttonRow}>
+
+                    <Pressable
+                        disabled = {isLoading}
+                        style = {({ pressed }) => [styles.button, (pressed || isLoading) && styles.pressed,]}
+                        onPress = {() => router.push('/register')}
                     >
                         <ThemedText
-                            type= 'smallBold'
-                            themeColor="secondaryText"
+                            type = "smallBold"
+                            themeColor = "secondaryText"
                         >
                             Sign up
                         </ThemedText>
                     </Pressable>
 
                     <Pressable 
-                        disabled={isLoading}
-                        style={({ pressed }) => [styles.button, (pressed || isLoading) && styles.pressed]}
-                        onPress={handleLogin}
+                        disabled = {isLoading}
+                        style = {({ pressed }) => [styles.button, (pressed || isLoading) && styles.pressed]}
+                        onPress = {handleLogin}
                     >
                         {isLoading ? (
                             <ActivityIndicator
-                                size="small"
-                                color={BrandColors.white}
+                                size = "small"
+                                color = {BrandColors.white}
                             />
                         ) : (
                             <ThemedText
-                                type="smallBold"
-                                themeColor="secondaryText"
+                                type = "smallBold"
+                                themeColor = "secondaryText"
                             >
                                 Log in
                             </ThemedText>
@@ -173,14 +190,14 @@ export default function LoginScreen() {
 
             <View style = {styles.teamInfo}>
                 <ThemedText
-                    type= 'smallBold'
-                    themeColor="secondaryText"
+                    type = 'smallBold'
+                    themeColor ="secondaryText"
                 >
                     Project GoodRun
                 </ThemedText>
                 <ThemedText
-                    type= 'small'
-                    themeColor="secondaryText"
+                    type = 'small'
+                    themeColor = "secondaryText"
                 >
                     by Team Falcons
                 </ThemedText>
@@ -266,5 +283,13 @@ const styles = StyleSheet.create({
     errorText: {
         color: BrandColors.red,
         fontSize: 11,
+    },
+
+    forgotPassword: {
+        alignItems: "flex-end",
+    },
+
+    forgotPasswordText: {
+        textDecorationLine: 'underline',
     },
 });
