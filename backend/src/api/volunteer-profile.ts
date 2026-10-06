@@ -169,31 +169,31 @@ export default async function volunteerProfileAPI(
       const body = request.body as {
         email: string;
         password: string;
-        fullName: string;
+        full_name: string;
         phone?: string;
         // vehicleType?: string;
         // serviceArea?: {
         //   latitude: number;
         //   longitude: number;
         // };
-        preferredPackageSize?: string;
+        preferred_package_size?: string;
         // availability?: Record<string, boolean>;
       };
 
       const {
         email,
         password,
-        fullName,
+        full_name,
         phone,
         // vehicleType,
         // serviceArea,
         // availability,
-        preferredPackageSize,
+        preferred_package_size,
       } = body;
 
 
       // raise error when basic data are empty
-      if (!email || !password || !fullName) {
+      if (!email || !password || !full_name) {
         return reply.status(400).send({
           error: "MISSING_CREDENTIAL",
           message: "email, password and fullName are required",
@@ -239,13 +239,13 @@ export default async function volunteerProfileAPI(
         .insert({
           id: userId,
           email,
-          full_name: fullName,
+          full_name: full_name,
           phone: phone ?? null,
           // vehicle_type: vehicleType ?? null,
           // service_area: serviceArea
           //   ? `POINT(${serviceArea.longitude} ${serviceArea.latitude})`
           //   : null,
-          preferred_package_size: preferredPackageSize,
+          preferred_package_size: preferred_package_size,
           // availability: availability ?? null,
           status: "pending_vetting",
         });
