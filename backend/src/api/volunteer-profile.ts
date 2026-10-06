@@ -100,7 +100,7 @@ export default async function volunteerProfileAPI(
       full_name?: string;
       phone?: string;
       vehicle_type?: string;
-      service_area?: unknown;
+      // service_area?: unknown;
       availability?: unknown;
       preferred_package_size?: string;
     };
@@ -117,9 +117,9 @@ export default async function volunteerProfileAPI(
       ...(body.vehicle_type !== undefined && {
         vehicle_type: body.vehicle_type
       }),
-      ...(body.service_area !== undefined && {
-        service_area: body.service_area
-      }),
+      // ...(body.service_area !== undefined && {
+      //   service_area: body.service_area
+      // }),
       ...(body.availability !== undefined && {
         availability: body.availability
       }),
@@ -172,10 +172,10 @@ export default async function volunteerProfileAPI(
         fullName: string;
         phone?: string;
         // vehicleType?: string;
-        serviceArea?: {
-          latitude: number;
-          longitude: number;
-        };
+        // serviceArea?: {
+        //   latitude: number;
+        //   longitude: number;
+        // };
         preferredPackageSize?: string;
         // availability?: Record<string, boolean>;
       };
@@ -186,7 +186,7 @@ export default async function volunteerProfileAPI(
         fullName,
         phone,
         // vehicleType,
-        serviceArea,
+        // serviceArea,
         // availability,
         preferredPackageSize,
       } = body;
@@ -242,9 +242,9 @@ export default async function volunteerProfileAPI(
           full_name: fullName,
           phone: phone ?? null,
           // vehicle_type: vehicleType ?? null,
-          service_area: serviceArea
-            ? `POINT(${serviceArea.longitude} ${serviceArea.latitude})`
-            : null,
+          // service_area: serviceArea
+          //   ? `POINT(${serviceArea.longitude} ${serviceArea.latitude})`
+          //   : null,
           preferred_package_size: preferredPackageSize,
           // availability: availability ?? null,
           status: "pending_vetting",
