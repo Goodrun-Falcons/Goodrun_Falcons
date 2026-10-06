@@ -102,6 +102,7 @@ export default async function volunteerProfileAPI(
       vehicle_type?: string;
       service_area?: unknown;
       availability?: unknown;
+      preferred_package_size?: string;
     };
 
 
@@ -121,6 +122,9 @@ export default async function volunteerProfileAPI(
       }),
       ...(body.availability !== undefined && {
         availability: body.availability
+      }),
+      ...(body.preferred_package_size !== undefined && {
+        preferred_package_size: body.preferred_package_size
       })
     };
 
@@ -167,12 +171,13 @@ export default async function volunteerProfileAPI(
         password: string;
         fullName: string;
         phone?: string;
-        vehicleType?: string;
+        // vehicleType?: string;
         serviceArea?: {
           latitude: number;
           longitude: number;
         };
-        availability?: Record<string, boolean>;
+        preferredPackageSize?: string;
+        // availability?: Record<string, boolean>;
       };
 
       const {
@@ -180,9 +185,10 @@ export default async function volunteerProfileAPI(
         password,
         fullName,
         phone,
-        vehicleType,
+        // vehicleType,
         serviceArea,
-        availability,
+        // availability,
+        preferredPackageSize,
       } = body;
 
 
@@ -235,11 +241,12 @@ export default async function volunteerProfileAPI(
           email,
           full_name: fullName,
           phone: phone ?? null,
-          vehicle_type: vehicleType ?? null,
+          // vehicle_type: vehicleType ?? null,
           service_area: serviceArea
             ? `POINT(${serviceArea.longitude} ${serviceArea.latitude})`
             : null,
-          availability: availability ?? null,
+          preferred_package_size: preferredPackageSize,
+          // availability: availability ?? null,
           status: "pending_vetting",
         });
 
