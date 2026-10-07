@@ -5,20 +5,14 @@ import Feather from '@expo/vector-icons/Feather';
 import { router, usePathname } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
-import {
-  BrandColors,
-  Colors,
-  Elevation,
-  Radius,
-  Spacing,
-} from '@/constants/theme';
+import { BrandColors, Colors, Elevation, Radius, Spacing } from '@/constants/theme';
 
 type IconName = ComponentProps<typeof Feather>['name'];
 
 type NavigationItem = {
   label: string;
   icon: IconName;
-  path?: '/home' | '/nearby' | '/profile';
+  path?: '/home' | '/nearby' | '/my-route' | '/profile';
   isDelivery?: boolean;
 };
 
@@ -26,7 +20,7 @@ const navigationItems: NavigationItem[] = [
   { label: 'Home', icon: 'home', path: '/home' },
   { label: 'Nearby Runs', icon: 'list', path: '/nearby' },
   { label: 'Current Delivery', icon: 'truck', isDelivery: true },
-  { label: 'My Route', icon: 'map' },
+  { label: 'My Route', icon: 'map', path: '/my-route' },
   { label: 'Profile', icon: 'user', path: '/profile' },
 ];
 
@@ -79,11 +73,7 @@ export default function NavigationBar({
           onPress={() => setNotice('')}
           style={styles.notice}
         >
-          <ThemedText
-            type="small"
-            accessibilityLiveRegion="polite"
-            style={styles.noticeText}
-          >
+          <ThemedText type="small" accessibilityLiveRegion="polite" style={styles.noticeText}>
             {notice}
           </ThemedText>
         </Pressable>
@@ -94,9 +84,7 @@ export default function NavigationBar({
       <View style={styles.items}>
         {navigationItems.map((item) => {
           const isSelected = item.path === pathname;
-          const color = isSelected
-            ? BrandColors.red
-            : Colors.light.mute;
+          const color = isSelected ? BrandColors.red : Colors.light.mute;
 
           if (item.isDelivery) {
             return (
@@ -105,16 +93,9 @@ export default function NavigationBar({
                   accessibilityRole="button"
                   accessibilityLabel="Open current delivery navigation"
                   onPress={() => handlePress(item)}
-                  style={({ pressed }) => [
-                    styles.deliveryButton,
-                    pressed && styles.pressed,
-                  ]}
+                  style={({ pressed }) => [styles.deliveryButton, pressed && styles.pressed]}
                 >
-                  <Feather
-                    name={item.icon}
-                    size={26}
-                    color={BrandColors.white}
-                  />
+                  <Feather name={item.icon} size={26} color={BrandColors.white} />
                 </Pressable>
               </View>
             );
@@ -127,17 +108,11 @@ export default function NavigationBar({
               accessibilityLabel={item.label}
               accessibilityState={{ selected: isSelected }}
               onPress={() => handlePress(item)}
-              style={({ pressed }) => [
-                styles.item,
-                pressed && styles.pressed,
-              ]}
+              style={({ pressed }) => [styles.item, pressed && styles.pressed]}
             >
               <Feather name={item.icon} size={22} color={color} />
 
-              <ThemedText
-                type="small"
-                style={[styles.label, { color }]}
-              >
+              <ThemedText type="small" style={[styles.label, { color }]}>
                 {item.label}
               </ThemedText>
             </Pressable>
