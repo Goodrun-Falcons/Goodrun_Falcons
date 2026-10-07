@@ -34,7 +34,14 @@
         }
       ],
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Goodrun needs camera access so you can photograph items during pickup handover.",
+          "photosPermission": "Goodrun needs photo library access so you can choose an item photo during pickup handover."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -3,9 +3,7 @@ import { Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import NavigationBar, {
-  NAVIGATION_HEIGHT,
-} from '@/components/navi-bar';
+import NavigationBar, { NAVIGATION_HEIGHT } from '@/components/navi-bar';
 import { Colors, Spacing } from '@/constants/theme';
 
 export default function NavigationLayout() {
@@ -13,10 +11,8 @@ export default function NavigationLayout() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
-    const showEvent =
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent =
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
     const showSubscription = Keyboard.addListener(showEvent, () => {
       setKeyboardVisible(true);
@@ -34,9 +30,7 @@ export default function NavigationLayout() {
 
   const bottomGap = insets.bottom + Spacing.xs;
 
-  const bottomSpace = keyboardVisible
-    ? 0
-    : NAVIGATION_HEIGHT + bottomGap + Spacing.xs;
+  const bottomSpace = keyboardVisible ? 0 : NAVIGATION_HEIGHT + bottomGap + Spacing.xs;
 
   return (
     <View style={styles.container}>

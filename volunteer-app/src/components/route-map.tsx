@@ -4,18 +4,18 @@ import WebView from 'react-native-webview';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, Typography } from '@/constants/theme';
-import { buildInteractiveMapHtml, MapMarker } from '@/lib/interactive-map-html';
+import { buildRouteMapHtml, RouteMarker } from '@/lib/route-map-html';
 
-export function InteractiveMap({
+export function RouteMap({
   markers,
+  dashed,
   style,
-  onMarkerPress,
 }: {
-  markers: MapMarker[];
+  markers: RouteMarker[];
+  dashed: boolean;
   style?: StyleProp<ViewStyle>;
-  onMarkerPress?: (id: string) => void;
 }) {
-  const html = buildInteractiveMapHtml(markers);
+  const html = buildRouteMapHtml(markers, dashed);
 
   if (!html) {
     return (
@@ -42,17 +42,6 @@ export function InteractiveMap({
       scrollEnabled={false}
       bounces={false}
       overScrollMode="never"
-      onMessage={(event) => {
-        if (!onMarkerPress) return;
-        try {
-          const message = JSON.parse(event.nativeEvent.data);
-          if (message?.type === 'markerPress' && typeof message.id === 'string') {
-            onMarkerPress(message.id);
-          }
-        } catch {
-          // Ignore malformed messages from the WebView.
-        }
-      }}
     />
   );
 }

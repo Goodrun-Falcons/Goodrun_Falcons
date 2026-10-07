@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -14,12 +14,24 @@ const URGENCY_LABEL: Record<TaskUrgency, string> = {
   flexible: 'Flexible',
 };
 
-export function TaskCard({ task }: { task: Task }) {
+type TaskCardProps = {
+  task: Task;
+  /** Omit to render the card without an accept action (e.g. the Home summary list). */
+  onAccept?: () => void;
+  accepted?: boolean;
+  /** True while this card is the target of a just-tapped map pin. */
+  highlighted?: boolean;
+};
+
+export function TaskCard({ task, onAccept, accepted, highlighted }: TaskCardProps) {
   const theme = useTheme();
   const isUrgent = task.urgency === 'urgent';
 
   return (
-    <ThemedView type="canvas" style={[styles.card, Elevation.level1]}>
+    <ThemedView
+      type="canvas"
+      style={[styles.card, Elevation.level1, highlighted && { borderColor: theme.primary }]}
+    >
       <View style={styles.headerRow}>
         <ThemedText style={styles.typeLabel} themeColor="ink">
           {task.type === 'pickup' ? 'Pickup' : 'Delivery'}
@@ -90,6 +102,24 @@ export function TaskCard({ task }: { task: Task }) {
           </ThemedText>
         </View>
       </View>
+
+      {onAccept && (
+        <Pressable
+          onPress={onAccept}
+          disabled={accepted}
+          style={[
+            styles.acceptButton,
+            { backgroundColor: accepted ? theme.canvasSoft : theme.primary },
+          ]}
+        >
+          <ThemedText
+            style={styles.acceptButtonLabel}
+            themeColor={accepted ? 'mute' : 'primaryText'}
+          >
+            {accepted ? 'Added to My Route' : 'Accept run'}
+          </ThemedText>
+        </Pressable>
+      )}
     </ThemedView>
   );
 }
@@ -98,6 +128,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
     padding: Spacing.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   headerRow: {
     flexDirection: 'row',
@@ -174,5 +206,15 @@ const styles = StyleSheet.create({
   },
   metaText: {
     ...Typography.bodySm,
+  },
+  acceptButton: {
+    marginTop: Spacing.md,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    paddingVertical: Spacing.xs + 2,
+  },
+  acceptButtonLabel: {
+    ...Typography.bodySm,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
   },
 });
