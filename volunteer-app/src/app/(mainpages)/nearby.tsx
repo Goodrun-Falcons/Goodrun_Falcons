@@ -1,6 +1,7 @@
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -19,8 +20,10 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useTrip } from '@/context/trip-context';
 import { mockTasks, WAREHOUSE_COORDS } from '@/data/mock-tasks';
 import { useTheme } from '@/hooks/use-theme';
+import { Task } from '@/types/task';
 
 // Placeholder until Story 3 (service area) / real geolocation supplies this.
 const SERVICE_AREA = 'Brunswick, VIC';
@@ -53,11 +56,14 @@ export default function NearbyScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const { acceptTask, isAccepted, acceptedCount } = useTrip();
   const [radiusKm, setRadiusKm] = useState<number | null>(RADIUS_OPTIONS[0].km);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   // The sheet's snap points are a % of the map area, not the full window —
   // the docked header above the map shortens that area, so measure it directly
   // instead of assuming it's the whole screen.
   const [mapAreaHeight, setMapAreaHeight] = useState(windowHeight);
+  const listRef = useRef<FlatList<Task>>(null);
 
   const tasks = mockTasks
     .filter((task) => radiusKm === null || task.distanceKm <= radiusKm)
@@ -67,10 +73,10 @@ export default function NearbyScreen() {
     { ...WAREHOUSE_COORDS, color: BrandColors.white },
     ...tasks
       .filter((task) => task.urgency === 'urgent')
-      .map((task) => ({ ...task.orgCoords, color: BrandColors.red })),
+      .map((task) => ({ ...task.orgCoords, color: BrandColors.red, id: task.id })),
     ...tasks
       .filter((task) => task.urgency !== 'urgent')
-      .map((task) => ({ ...task.orgCoords, color: '#8a8d99' })),
+      .map((task) => ({ ...task.orgCoords, color: '#8a8d99', id: task.id })),
   ];
 
   const collapsedHeight = Math.round(mapAreaHeight * SHEET_COLLAPSED_RATIO);
@@ -80,6 +86,15 @@ export default function NearbyScreen() {
 
   const sheetHeight = useSharedValue(defaultHeight);
   const dragStartHeight = useSharedValue(defaultHeight);
+
+  function handleMarkerPress(taskId: string) {
+    const index = tasks.findIndex((task) => task.id === taskId);
+    if (index === -1) return;
+    setHighlightedTaskId(taskId);
+    // Expand the sheet so the highlighted card is actually visible, then scroll to it.
+    sheetHeight.value = withSpring(defaultHeight, { damping: 22, stiffness: 220 });
+    listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.1 });
+  }
 
   const panGesture = Gesture.Pan()
     .onStart(() => {
@@ -103,6 +118,8 @@ export default function NearbyScreen() {
     });
 
   const animatedSheetStyle = useAnimatedStyle(() => ({ height: sheetHeight.value }));
+  // Floats just above the sheet's top edge, so it tracks the sheet as it's dragged open/closed.
+  const routeCtaStyle = useAnimatedStyle(() => ({ bottom: sheetHeight.value + Spacing.sm }));
 
   return (
     <GestureHandlerRootView style={styles.screen}>
@@ -169,7 +186,11 @@ export default function NearbyScreen() {
             sheetHeight.value = Math.round(height * SHEET_DEFAULT_RATIO);
           }}
         >
-          <InteractiveMap markers={mapMarkers} style={styles.mapImage} />
+          <InteractiveMap
+            markers={mapMarkers}
+            style={styles.mapImage}
+            onMarkerPress={handleMarkerPress}
+          />
 
           <Animated.View style={[styles.sheet, Elevation.level2, animatedSheetStyle]}>
             <GestureDetector gesture={panGesture}>
@@ -178,13 +199,26 @@ export default function NearbyScreen() {
               </View>
             </GestureDetector>
             <FlatList
+              ref={listRef}
               style={styles.list}
               alwaysBounceHorizontal={false}
               directionalLockEnabled
               data={tasks}
               keyExtractor={(task) => task.id}
-              renderItem={({ item }) => <TaskCard task={item} />}
+              renderItem={({ item }) => (
+                <TaskCard
+                  task={item}
+                  accepted={isAccepted(item.id)}
+                  onAccept={() => acceptTask(item)}
+                  highlighted={item.id === highlightedTaskId}
+                />
+              )}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
+              onScrollToIndexFailed={(info) => {
+                setTimeout(() => {
+                  listRef.current?.scrollToIndex({ index: info.index, animated: true });
+                }, 100);
+              }}
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
                 <ThemedText style={styles.emptyState} themeColor="mute">
@@ -193,6 +227,22 @@ export default function NearbyScreen() {
               }
             />
           </Animated.View>
+
+          {acceptedCount > 0 && (
+            <Animated.View style={[styles.routeCta, Elevation.level2, routeCtaStyle]}>
+              <ThemedText style={styles.routeCtaLabel} themeColor="primaryText">
+                {acceptedCount} stop{acceptedCount === 1 ? '' : 's'} · ready to plan
+              </ThemedText>
+              <Pressable
+                onPress={() => router.push('/my-route')}
+                style={[styles.routeCtaButton, { backgroundColor: theme.primary }]}
+              >
+                <ThemedText style={styles.routeCtaButtonLabel} themeColor="primaryText">
+                  Plan route →
+                </ThemedText>
+              </Pressable>
+            </Animated.View>
+          )}
         </View>
       </ThemedView>
     </GestureHandlerRootView>
@@ -295,5 +345,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingTop: Spacing.xxxl,
     paddingHorizontal: Spacing.lg,
+  },
+  routeCta: {
+    position: 'absolute',
+    left: Spacing.md,
+    right: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: BrandColors.navy,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+  },
+  routeCtaLabel: {
+    ...Typography.bodySm,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
+  },
+  routeCtaButton: {
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xxs,
+  },
+  routeCtaButtonLabel: {
+    ...Typography.bodySm,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
   },
 });

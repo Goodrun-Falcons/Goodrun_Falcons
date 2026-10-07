@@ -9,9 +9,11 @@ import { buildInteractiveMapHtml, MapMarker } from '@/lib/interactive-map-html';
 export function InteractiveMap({
   markers,
   style,
+  onMarkerPress,
 }: {
   markers: MapMarker[];
   style?: StyleProp<ViewStyle>;
+  onMarkerPress?: (id: string) => void;
 }) {
   const html = buildInteractiveMapHtml(markers);
 
@@ -40,6 +42,17 @@ export function InteractiveMap({
       scrollEnabled={false}
       bounces={false}
       overScrollMode="never"
+      onMessage={(event) => {
+        if (!onMarkerPress) return;
+        try {
+          const message = JSON.parse(event.nativeEvent.data);
+          if (message?.type === 'markerPress' && typeof message.id === 'string') {
+            onMarkerPress(message.id);
+          }
+        } catch {
+          // Ignore malformed messages from the WebView.
+        }
+      }}
     />
   );
 }
