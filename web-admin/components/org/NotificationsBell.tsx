@@ -56,12 +56,13 @@ export function NotificationsBell() {
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
 
     async function subscribe() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || cancelled) return;
 
       channel = supabase
         .channel(`org-notifications-${user.id}`)
@@ -91,6 +92,7 @@ export function NotificationsBell() {
 
     subscribe();
     return () => {
+      cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
   }, []);
