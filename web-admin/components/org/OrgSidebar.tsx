@@ -31,6 +31,20 @@ function ListIcon() {
   );
 }
 
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M8.3 2.2h3.4l.4 2a6.4 6.4 0 0 1 1.5.9l1.9-.7 1.7 3-1.5 1.3a6.5 6.5 0 0 1 0 1.7l1.5 1.3-1.7 3-1.9-.7a6.4 6.4 0 0 1-1.5.9l-.4 2H8.3l-.4-2a6.4 6.4 0 0 1-1.5-.9l-1.9.7-1.7-3 1.5-1.3a6.5 6.5 0 0 1 0-1.7L2.8 7.7l1.7-3 1.9.7a6.4 6.4 0 0 1 1.5-.9l.4-2Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
 function SupportIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
@@ -102,6 +116,17 @@ export function OrgSidebar() {
       </nav>
 
       <div className="border-t border-[#3e446b] pt-2">
+        <Link
+          href="/org/settings"
+          className={
+            pathname === "/org/settings"
+              ? "flex items-center gap-3 border-l-4 border-[#8f0002] bg-[rgba(143,0,2,0.1)] py-3 pl-5 pr-4 text-[12px] font-medium text-[#ffdad5]"
+              : "flex items-center gap-3 px-4 py-3 text-[12px] font-medium text-[rgba(227,225,235,0.7)]"
+          }
+        >
+          <SettingsIcon />
+          Settings
+        </Link>
         <Link
           href="/org/support"
           className="flex items-center gap-3 px-4 py-3 text-[12px] font-medium text-[rgba(227,225,235,0.7)]"

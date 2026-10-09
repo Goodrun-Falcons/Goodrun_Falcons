@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 function BellIcon() {
   return (
     <svg viewBox="0 0 16 20" fill="none" className="h-5 w-4">
@@ -37,10 +39,15 @@ export function OrgTopBar({ orgName }: { orgName: string }) {
           <BellIcon />
           <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#b9100b]" />
         </div>
-        <SettingsIcon />
-        <div className="flex size-8 items-center justify-center rounded-full bg-[#bec4f1] text-[12px] font-semibold text-[#11183c]">
+        <Link href="/org/settings" aria-label="Settings">
+          <SettingsIcon />
+        </Link>
+        <Link
+          href="/org/settings"
+          className="flex size-8 items-center justify-center rounded-full bg-[#bec4f1] text-[12px] font-semibold text-[#11183c]"
+        >
           {orgName.charAt(0).toUpperCase()}
-        </div>
+        </Link>
       </div>
     </div>
   );
