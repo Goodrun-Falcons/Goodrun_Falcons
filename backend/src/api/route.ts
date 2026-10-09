@@ -140,4 +140,243 @@ export default async function routeAPI(app: FastifyInstance) {
     return reply.send(updatedRoute);
   });
 
+
+
+    // POST End Route
+    // Volunteer ends their active route
+
+    app.post("/routes/:id/end", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          error: "Missing or invalid authorisation header",
+        });
+      }
+
+      const token = authHeader.substring("Bearer ".length);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return reply.status(401).send({
+          error: "Unauthorised",
+        });
+      }
+
+      const { id: routeId } = request.params as { id: string };
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISHABLE_KEY!,
+        {
+          accessToken: async () => token,
+        }
+      );
+
+      // find the route that belongs to the current volunteer
+      const {
+        data: route,
+        error: routeError,
+      } = await supabaseUser
+        .from("routes")
+        .select("id, volunteer_id, status")
+        .eq("id", routeId)
+        .eq("volunteer_id", user.id)
+        .maybeSingle();
+
+      if (routeError) {
+        request.log.error(routeError);
+
+        return reply.status(500).send({
+          error: "Failed to retrieve route",
+        });
+      }
+
+      if (!route) {
+        return reply.status(404).send({
+          error: "Route not found",
+        });
+      }
+
+      // only active routes can be ended
+      if (route.status !== "active") {
+        return reply.status(409).send({
+          error: "Route is not active",
+        });
+      }
+
+      // check whether there are stops that are incomplete
+      const {
+        data: unfinishedStops,
+        error: stopsError,
+      } = await supabaseUser
+        .from("route_stops")
+        .select("id, sequence_number, status")
+        .eq("route_id", routeId)
+        .neq("status", "completed")
+        .limit(1);
+
+      if (stopsError) {
+        request.log.error(stopsError);
+
+        return reply.status(500).send({
+          error: "Failed to check route stops",
+        });
+      }
+
+      if (unfinishedStops && unfinishedStops.length > 0) {
+        return reply.status(409).send({
+          error: "ROUTE_HAS_UNCOMPLETED_STOPS",
+          message: "Complete all route stops before ending the route.",
+        });
+      }
+
+      // end the route
+      const {
+        data: updatedRoute,
+        error: updateError,
+      } = await supabaseUser
+        .from("routes")
+        .update({
+          status: "completed",
+          ended_at: new Date().toISOString(),
+        })
+        .eq("id", routeId)
+        .eq("volunteer_id", user.id)
+        .eq("status", "active")
+        .select("id, volunteer_id, status, started_at, ended_at")
+        .maybeSingle();
+
+      if (updateError) {
+        request.log.error(updateError);
+
+        return reply.status(500).send({
+          error: "Failed to end route",
+        });
+      }
+
+      if (!updatedRoute) {
+        return reply.status(409).send({
+          error: "Route status has changed. Please refresh and try again.",
+        });
+      }
+
+      return reply.status(200).send({
+        message: "Route ended successfully",
+        route: updatedRoute
+      });
+    });
+
+
+    
+
+      // GET Route
+      // Volunteer retrieves their route with ordered stops and pickup/item details
+
+      app.get("/routes/:id", async (request, reply) => {
+        const authHeader = request.headers.authorization;
+
+        if (!authHeader?.startsWith("Bearer ")) {
+          return reply.status(401).send({
+            error: "Missing or invalid authorisation header",
+          });
+        }
+
+        const token = authHeader.substring("Bearer ".length);
+
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
+          return reply.status(401).send({
+            error: "Unauthorised",
+          });
+        }
+
+        const { id: routeId } = request.params as { id: string };
+
+        const supabaseUser = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_PUBLISHABLE_KEY!,
+          {
+            accessToken: async () => token,
+          }
+        );
+
+        // retrieve the route and its related stops, pickups and items
+        const {
+          data: route,
+          error: routeError,
+        } = await supabaseUser
+          .from("routes")
+          .select(`
+            id,
+            volunteer_id,
+            status,
+            current_location,
+            started_at,
+            ended_at,
+            created_at,
+            route_stops (
+              id,
+              stop_type,
+              sequence_number,
+              status,
+              arrival_time,
+              completion_time,
+              pickups (
+                id,
+                item_id,
+                volunteer_id,
+                status,
+                handover_photo_url,
+                handover_timestamp,
+                started_at,
+                ended_at,
+                items (
+                  id,
+                  item_type,
+                  quantity,
+                  description,
+                  pickup_location,
+                  dropoff_location,
+                  urgency,
+                  status,
+                  organisation_id
+                )
+              )
+            )
+          `)
+          .eq("id", routeId)
+          .eq("volunteer_id", user.id)
+          .order("sequence_number", {
+            referencedTable: "route_stops",
+            ascending: true,
+          })
+          .maybeSingle();
+
+        if (routeError) {
+          request.log.error(routeError);
+
+          return reply.status(500).send({
+            error: "Failed to retrieve route",
+          });
+        }
+
+        if (!route) {
+          return reply.status(404).send({
+            error: "Route not found",
+          });
+        }
+
+        return reply.status(200).send(route);
+    });
+    
+
 }
