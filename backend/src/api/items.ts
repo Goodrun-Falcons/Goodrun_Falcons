@@ -94,8 +94,16 @@ export default async function itemAPI(app: FastifyInstance) {
       return reply.status(401).send({ error: "Unauthorised" });
     }
 
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISH_KEY!,
+      {
+          accessToken: async() => token
+      }
+      )
+
     
-    // obtain user ID
+    // obtain item ID
     const { id } = request.params as { id: string };
 
     
@@ -103,7 +111,7 @@ export default async function itemAPI(app: FastifyInstance) {
     const {
       data: item,
       error: itemError,
-    } = await supabase
+    } = await supabaseUser
       .from("items")
       .select("*")
       .eq("id", id)
@@ -147,7 +155,7 @@ export default async function itemAPI(app: FastifyInstance) {
     const {
       data: updatedItem,
       error: updateError,
-    } = await supabase
+    } = await supabaseUser
       .from("items")
       .update({ status: "accepted" })
       .eq("id", id)
@@ -164,7 +172,107 @@ export default async function itemAPI(app: FastifyInstance) {
 
         
     // return pickup
-    return reply.status(201).send(pickup);
-    
+    return reply.status(201).send(pickup)
+    });
+
+
+
+    // POST Cancel
+    // Volunteer cancels an item which they accepted earlier
+    app.post("/items/:id/cancel", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+  
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply
+          .status(401)
+          .send({ error: "Missing or invalid authorisation header" });
+      }
+  
+  
+      const token = authHeader.substring("Bearer ".length);
+  
+  
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+  
+      if (authError || !user) {
+        return reply.status(401).send({ error: "Unauthorised" });
+      }
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISH_KEY!,
+        {
+            accessToken: async() => token
+        }
+        )
+  
+      
+      // obtain item ID
+      const { id } = request.params as { id: string };
+  
+      
+      // check item status, return error if not found or item unavailable
+      const {
+        data: item,
+        error: itemError,
+      } = await supabaseUser
+        .from("items")
+        .select("*")
+        .eq("id", id)
+        .single();
+  
+      if (itemError || !item) {
+        return reply.status(404).send({ error: "Item not found" });
+      }
+  
+      if (item.status !== "accepted") {
+        return reply
+          .status(409)
+          .send({ error: "Item is not accepted or already in transit" });
+      }
+  
+  
+      // delete pickup row
+      const { pickup_id } = await supabaseUser
+        .from("pickups")
+        .delete()
+        .eq("item_id", id)
+        .eq("volunteer_id", user.id)
+        .maybeSingle();
+  
+      if (!pickup_id) {
+        request.log.error(pickupError);
+  
+        return reply
+          .status(500)
+          .send({ error: "Failed to find pickup" });
+      }
+  
+  
+      // update item status to be "pending" after pickup deletion
+      const {
+        data: updatedItem,
+        error: updateError,
+      } = await supabase
+        .from("items")
+        .update({ status: "pending" })
+        .eq("id", id)
+        .select()
+        .single();
+  
+      if (updateError || !updatedItem) {
+        request.log.error(updateError);
+  
+        return reply
+          .status(500)
+          .send({ error: "Pickup created but failed to update item status" });
+      }
+  
+          
+      // return item
+      return reply.status(200).send(updatedItem);
     });
 }
