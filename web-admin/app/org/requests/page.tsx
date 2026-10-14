@@ -76,11 +76,13 @@ function MyRequestsContent() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || cancelled) return;
 
       const { data: orgItems } = await supabase
         .from("items")
@@ -88,6 +90,7 @@ function MyRequestsContent() {
         .eq("organisation_id", user.id)
         .order("created_at", { ascending: false });
 
+      if (cancelled) return;
       setItems(orgItems ?? []);
       setLoading(false);
 
@@ -116,6 +119,7 @@ function MyRequestsContent() {
     const channelPromise = load();
 
     return () => {
+      cancelled = true;
       channelPromise.then((channel) => {
         if (channel) supabase.removeChannel(channel);
       });

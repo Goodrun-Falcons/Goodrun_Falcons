@@ -99,11 +99,13 @@ export default function RequestDetailPage() {
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || cancelled) return;
 
       const { data, error } = await supabase
         .from("items")
@@ -112,6 +114,7 @@ export default function RequestDetailPage() {
         .eq("organisation_id", user.id)
         .maybeSingle();
 
+      if (cancelled) return;
       if (error || !data) {
         setNotFound(true);
       } else {
@@ -120,6 +123,10 @@ export default function RequestDetailPage() {
       setLoading(false);
     }
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [params.id]);
 
   useEffect(() => {
