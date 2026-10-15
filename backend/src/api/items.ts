@@ -275,4 +275,123 @@ export default async function itemAPI(app: FastifyInstance) {
       // return item
       return reply.status(200).send(updatedItem);
     });
+
+
+
+    // GET new item
+    // Admin request newly accepted requests
+    app.get("/admin/items/accepted", async (request, reply) => {
+      try {
+        const authHeader = request.headers.authorization;
+
+        if (!authHeader?.startsWith("Bearer ")) {
+          return reply.status(401).send({
+            error: "Missing or invalid authorisation header",
+          });
+        }
+
+        const token = authHeader.substring("Bearer ".length);
+
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
+          return reply.status(401).send({
+            error: "Unauthorised",
+          });
+        }
+
+        // obtain timestamp
+        const { after } = request.query as {
+          after?: string;
+        };
+
+        if (!after || Number.isNaN(new Date(after).getTime())) {
+          return reply.status(400).send({
+            error: "INVALID_TIMESTAMP",
+            message: "A valid 'after' timestamp is required.",
+          });
+        }
+
+        const supabaseUser = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_PUBLISHABLE_KEY!,
+          {
+            accessToken: async () => token,
+          }
+        );
+
+        // check Admin permission
+        const {
+          data: admin,
+          error: adminError,
+        } = await supabaseUser
+          .from("admins")
+          .select("id")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (adminError) {
+          request.log.error(adminError);
+
+          return reply.status(500).send({
+            error: "Failed to verify admin permissions",
+          });
+        }
+
+        if (!admin) {
+          return reply.status(403).send({
+            error: "FORBIDDEN",
+            message: "Admin access is required.",
+          });
+        }
+
+        // query newly accepted items
+        const {
+          data: items,
+          error: itemsError,
+        } = await supabaseUser
+          .from("items")
+          .select(`
+            id,
+            item_type,
+            quantity,
+            description,
+            urgency,
+            status,
+            accepted_at
+          `)
+          .eq("status", "accepted")
+          .gt("accepted_at", after)
+          .order("accepted_at", { ascending: true })
+          .limit(100);
+
+        if (itemsError) {
+          request.log.error(itemsError);
+
+          return reply.status(500).send({
+            error: "Failed to retrieve accepted items",
+          });
+        }
+
+        const results = items ?? [];
+
+        // return results
+        return reply.status(200).send({
+          items: results,
+          nextCursor:
+            results.length > 0
+              ? results[results.length - 1].accepted_at
+              : after,
+        });
+      } catch (error) {
+        request.log.error(error);
+
+        return reply.status(500).send({
+          error: "Internal server error",
+        });
+      }
+});
 }
