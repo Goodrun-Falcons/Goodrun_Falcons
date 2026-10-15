@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../supabase/types";
+import { formatItemsLabel } from "@/lib/requestItems";
 
-type Item = Database["public"]["Tables"]["items"]["Row"];
+type RequestRow = Database["public"]["Tables"]["requests"]["Row"];
 
 type Notification = {
   id: string;
-  itemId: string;
+  requestId: string;
   itemLabel: string;
   status: string;
   createdAt: string;
@@ -68,18 +69,23 @@ export function NotificationsBell() {
         .channel(`org-notifications-${user.id}`)
         .on(
           "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "items", filter: `organisation_id=eq.${user.id}` },
-          (payload) => {
-            const item = payload.new as Item;
-            const oldItem = payload.old as Partial<Item>;
-            if (oldItem.status === item.status) return;
+          { event: "UPDATE", schema: "public", table: "requests", filter: `organisation_id=eq.${user.id}` },
+          async (payload) => {
+            const request = payload.new as RequestRow;
+            const oldRequest = payload.old as Partial<RequestRow>;
+            if (oldRequest.status === request.status) return;
+
+            const { data: requestItems } = await supabase
+              .from("request_items")
+              .select("item_type, quantity")
+              .eq("request_id", request.id);
 
             setNotifications((prev) => [
               {
-                id: `${item.id}-${item.status}-${Date.now()}`,
-                itemId: item.id,
-                itemLabel: `${item.item_type} × ${item.quantity}`,
-                status: item.status,
+                id: `${request.id}-${request.status}-${Date.now()}`,
+                requestId: request.id,
+                itemLabel: formatItemsLabel(requestItems ?? []),
+                status: request.status,
                 createdAt: new Date().toISOString(),
               },
               ...prev,
@@ -129,7 +135,7 @@ export function NotificationsBell() {
               {notifications.map((n) => (
                 <li key={n.id} className="border-b border-[#eaecf0] last:border-b-0">
                   <Link
-                    href={`/org/requests/${n.itemId}`}
+                    href={`/org/requests/${n.requestId}`}
                     onClick={() => setIsOpen(false)}
                     className="block px-4 py-3 text-[13px] text-[#191c1d] hover:bg-[#f8f9fa]"
                   >

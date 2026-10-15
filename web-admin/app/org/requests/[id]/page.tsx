@@ -6,8 +6,12 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../../supabase/types";
 import { LiveTrackingMap } from "@/components/org/LiveTrackingMap";
+import { formatItemsLabel, type RequestItem } from "@/lib/requestItems";
+import { tagLabel } from "@/lib/tags";
 
-type Item = Database["public"]["Tables"]["items"]["Row"];
+type Request = Database["public"]["Tables"]["requests"]["Row"] & {
+  request_items: RequestItem[];
+};
 type Route = Database["public"]["Tables"]["routes"]["Row"];
 
 function BackIcon() {
@@ -93,7 +97,7 @@ function StatusTimeline({ status }: { status: string }) {
 
 export default function RequestDetailPage() {
   const params = useParams<{ id: string }>();
-  const [item, setItem] = useState<Item | null>(null);
+  const [request, setRequest] = useState<Request | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -108,8 +112,8 @@ export default function RequestDetailPage() {
       if (!user || cancelled) return;
 
       const { data, error } = await supabase
-        .from("items")
-        .select("*")
+        .from("requests")
+        .select("*, request_items(*)")
         .eq("id", params.id)
         .eq("organisation_id", user.id)
         .maybeSingle();
@@ -118,7 +122,7 @@ export default function RequestDetailPage() {
       if (error || !data) {
         setNotFound(true);
       } else {
-        setItem(data);
+        setRequest(data as Request);
       }
       setLoading(false);
     }
@@ -131,11 +135,14 @@ export default function RequestDetailPage() {
 
   useEffect(() => {
     const channel = supabase
-      .channel(`item-${params.id}`)
+      .channel(`request-${params.id}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "items", filter: `id=eq.${params.id}` },
-        (payload) => setItem((prev) => (prev ? { ...prev, ...(payload.new as Item) } : prev))
+        { event: "UPDATE", schema: "public", table: "requests", filter: `id=eq.${params.id}` },
+        (payload) =>
+          setRequest((prev) =>
+            prev ? { ...prev, ...(payload.new as Database["public"]["Tables"]["requests"]["Row"]) } : prev
+          )
       )
       .subscribe();
 
@@ -145,13 +152,13 @@ export default function RequestDetailPage() {
   }, [params.id]);
 
   useEffect(() => {
-    if (!item) return;
+    if (!request) return;
 
     async function loadRoute() {
       const { data } = await supabase
         .from("pickups")
         .select("*, routes(*)")
-        .eq("item_id", item!.id)
+        .eq("request_id", request!.id)
         .not("route_id", "is", null)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -160,7 +167,7 @@ export default function RequestDetailPage() {
       setRoute((data?.routes as Route | null) ?? null);
     }
     loadRoute();
-  }, [item]);
+  }, [request]);
 
   useEffect(() => {
     if (!route?.id) return;
@@ -183,7 +190,7 @@ export default function RequestDetailPage() {
     return <div className="p-6 text-[#46464e]">Loading…</div>;
   }
 
-  if (notFound || !item) {
+  if (notFound || !request) {
     return (
       <div className="flex flex-col gap-4 p-6">
         <p className="text-[16px] text-[#46464e]">Request not found.</p>
@@ -194,7 +201,7 @@ export default function RequestDetailPage() {
     );
   }
 
-  const isLive = item.status === "in_transit";
+  const isLive = request.status === "in_transit";
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -207,24 +214,24 @@ export default function RequestDetailPage() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <h2 className="text-[32px] font-semibold leading-[40px] tracking-[-0.32px] text-[#191c1d]">
-              {item.item_type} × {item.quantity}
+              {formatItemsLabel(request.request_items)}
             </h2>
-            {urgencyBadge(item.urgency)}
+            {urgencyBadge(request.urgency)}
           </div>
           <p className="text-[14px] text-[#6b7280]">
-            Request #{item.id.slice(0, 8)} · Submitted {new Date(item.created_at).toLocaleString()}
+            Request #{request.id.slice(0, 8)} · Submitted {new Date(request.created_at).toLocaleString()}
           </p>
         </div>
-        {statusBadge(item.status)}
+        {statusBadge(request.status)}
       </div>
 
       <div className="w-full rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
-        {item.status === "rejected" ? (
+        {request.status === "rejected" ? (
           <p className="text-[14px] text-[#93000a]">
             This request was reviewed and rejected by an admin.
           </p>
         ) : (
-          <StatusTimeline status={item.status} />
+          <StatusTimeline status={request.status} />
         )}
       </div>
 
@@ -232,22 +239,29 @@ export default function RequestDetailPage() {
         <div className="flex flex-col gap-4 rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
           <h3 className="text-[16px] font-semibold text-[#191c1d]">Request Details</h3>
           <div className="flex flex-col gap-3 text-[14px]">
-            <div className="flex justify-between">
-              <span className="text-[#6b7280]">Item Type</span>
-              <span className="font-medium text-[#191c1d]">{item.item_type}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[#6b7280]">Quantity</span>
-              <span className="font-medium text-[#191c1d]">{item.quantity}</span>
+            <div className="flex flex-col gap-2 border-b border-[#eaecf0] pb-3">
+              <span className="text-[#6b7280]">Items</span>
+              {request.request_items.map((requestItem, index) => (
+                <div key={index} className="flex justify-between">
+                  <span className="font-medium text-[#191c1d]">{requestItem.item_type}</span>
+                  <span className="font-medium text-[#191c1d]">× {requestItem.quantity}</span>
+                </div>
+              ))}
             </div>
             <div className="flex justify-between">
               <span className="text-[#6b7280]">Urgency</span>
-              <span className="font-medium capitalize text-[#191c1d]">{item.urgency}</span>
+              <span className="font-medium capitalize text-[#191c1d]">{request.urgency}</span>
             </div>
-            {item.description && (
+            {tagLabel(request.tag) && (
+              <div className="flex justify-between">
+                <span className="text-[#6b7280]">Team Tag</span>
+                <span className="font-medium text-[#191c1d]">{tagLabel(request.tag)}</span>
+              </div>
+            )}
+            {request.description && (
               <div className="flex flex-col gap-1 border-t border-[#eaecf0] pt-3">
                 <span className="text-[#6b7280]">Description</span>
-                <span className="font-medium text-[#191c1d]">{item.description}</span>
+                <span className="font-medium text-[#191c1d]">{request.description}</span>
               </div>
             )}
           </div>
@@ -255,12 +269,12 @@ export default function RequestDetailPage() {
 
         <div className="flex flex-col gap-4 rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
           <h3 className="text-[16px] font-semibold text-[#191c1d]">Live Tracking</h3>
-          {isLive && item.pickup_lat != null && item.pickup_lng != null ? (
+          {isLive && request.pickup_lat != null && request.pickup_lng != null ? (
             <LiveTrackingMap
-              pickup={{ lat: item.pickup_lat, lng: item.pickup_lng }}
+              pickup={{ lat: request.pickup_lat, lng: request.pickup_lng }}
               dropoff={
-                item.dropoff_lat != null && item.dropoff_lng != null
-                  ? { lat: item.dropoff_lat, lng: item.dropoff_lng }
+                request.dropoff_lat != null && request.dropoff_lng != null
+                  ? { lat: request.dropoff_lat, lng: request.dropoff_lng }
                   : null
               }
               volunteer={
