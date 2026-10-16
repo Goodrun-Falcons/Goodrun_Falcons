@@ -145,7 +145,7 @@ export default function ProfileScreen() {
   const submitProfileRequest = async () => {
     if (isSaving) return;
 
-    const phone = draft.phone.trim();
+    const phone = draft.phone.replace(/[\s()-]/g, '');
     const preferredPackageSize = draft.preferredPackageSize;
 
     setError('');
@@ -153,6 +153,11 @@ export default function ProfileScreen() {
 
     if (!phone) {
       setError('Please enter your phone number.');
+      return;
+    }
+
+    if (!/^(?:04\d{8}|\+614\d{8})$/.test(phone)) {
+      setError('Please enter a valid Australian mobile number (04xxxxxxxx or +614xxxxxxxx).');
       return;
     }
 
