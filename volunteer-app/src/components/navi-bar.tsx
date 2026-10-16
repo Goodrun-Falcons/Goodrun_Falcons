@@ -19,8 +19,8 @@ type NavigationItem = {
 const navigationItems: NavigationItem[] = [
   { label: 'Home', icon: 'home', path: '/home' },
   { label: 'Nearby Runs', icon: 'list', path: '/nearby' },
-  { label: 'Current Delivery', icon: 'truck', isDelivery: true },
-  { label: 'My Route', icon: 'map', path: '/my-route' },
+  {label: 'My Route', icon: 'map', path: '/my-route', isDelivery: true,},
+  { label: 'Support', icon: 'help-circle' },
   { label: 'Profile', icon: 'user', path: '/profile' },
 ];
 
@@ -31,24 +31,12 @@ type NavigationBarProps = {
   onMyRoutePress?: () => void;
 };
 
-export default function NavigationBar({
-  onCurrentDeliveryPress,
-  onMyRoutePress,
-}: NavigationBarProps) {
+export default function NavigationBar({}: NavigationBarProps) {
   const pathname = usePathname();
   const [notice, setNotice] = useState('');
 
   function handlePress(item: NavigationItem) {
     setNotice('');
-
-    if (item.isDelivery) {
-      if (onCurrentDeliveryPress) {
-        onCurrentDeliveryPress();
-      } else {
-        setNotice('Current delivery navigation is coming soon.');
-      }
-      return;
-    }
 
     if (item.path) {
       if (pathname !== item.path) {
@@ -57,10 +45,8 @@ export default function NavigationBar({
       return;
     }
 
-    if (onMyRoutePress) {
-      onMyRoutePress();
-    } else {
-      setNotice('My Route is coming soon.');
+    if (item.label === 'Support') {
+      setNotice('Support is coming soon.');
     }
   }
 
@@ -91,7 +77,8 @@ export default function NavigationBar({
               <View key={item.label} style={styles.deliverySlot}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Open current delivery navigation"
+                  accessibilityLabel="Open My Route"
+                  accessibilityState={{ selected: isSelected }}
                   onPress={() => handlePress(item)}
                   style={({ pressed }) => [styles.deliveryButton, pressed && styles.pressed]}
                 >
