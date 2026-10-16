@@ -5,8 +5,12 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../supabase/types";
+import { formatItemsLabel, type RequestItem } from "@/lib/requestItems";
+import { tagLabel } from "@/lib/tags";
 
-type Item = Database["public"]["Tables"]["items"]["Row"];
+type Request = Database["public"]["Tables"]["requests"]["Row"] & {
+  request_items: RequestItem[];
+};
 
 type Filter = "all" | "active" | "delivered";
 
@@ -48,14 +52,14 @@ function statusBadge(status: string) {
   );
 }
 
-function matchesFilter(item: Item, filter: Filter) {
+function matchesFilter(request: Request, filter: Filter) {
   if (filter === "all") return true;
-  if (filter === "delivered") return item.status === "delivered";
+  if (filter === "delivered") return request.status === "delivered";
   return (
-    item.status === "pending" ||
-    item.status === "approved" ||
-    item.status === "accepted" ||
-    item.status === "in_transit"
+    request.status === "pending" ||
+    request.status === "approved" ||
+    request.status === "accepted" ||
+    request.status === "in_transit"
   );
 }
 
@@ -72,7 +76,7 @@ function MyRequestsContent() {
   const searchParams = useSearchParams();
   const filter = (searchParams.get("filter") as Filter) ?? "all";
 
-  const [items, setItems] = useState<Item[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -84,30 +88,37 @@ function MyRequestsContent() {
       } = await supabase.auth.getUser();
       if (!user || cancelled) return;
 
-      const { data: orgItems } = await supabase
-        .from("items")
-        .select("*")
+      const { data: orgRequests } = await supabase
+        .from("requests")
+        .select("*, request_items(*)")
         .eq("organisation_id", user.id)
         .order("created_at", { ascending: false });
 
       if (cancelled) return;
-      setItems(orgItems ?? []);
+      setRequests((orgRequests as Request[] | null) ?? []);
       setLoading(false);
 
       const channel = supabase
-        .channel(`org-items-${user.id}`)
+        .channel(`org-requests-${user.id}`)
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "items", filter: `organisation_id=eq.${user.id}` },
-          (payload) => {
+          { event: "*", schema: "public", table: "requests", filter: `organisation_id=eq.${user.id}` },
+          async (payload) => {
             if (payload.eventType === "INSERT") {
-              setItems((prev) => [payload.new as Item, ...prev]);
+              const newRequest = payload.new as Database["public"]["Tables"]["requests"]["Row"];
+              const { data: requestItems } = await supabase
+                .from("request_items")
+                .select("*")
+                .eq("request_id", newRequest.id);
+              setRequests((prev) => [{ ...newRequest, request_items: requestItems ?? [] }, ...prev]);
             } else if (payload.eventType === "UPDATE") {
-              setItems((prev) =>
-                prev.map((item) => (item.id === (payload.new as Item).id ? (payload.new as Item) : item))
+              const updated = payload.new as Database["public"]["Tables"]["requests"]["Row"];
+              setRequests((prev) =>
+                prev.map((request) => (request.id === updated.id ? { ...request, ...updated } : request))
               );
             } else if (payload.eventType === "DELETE") {
-              setItems((prev) => prev.filter((item) => item.id !== (payload.old as Item).id));
+              const deleted = payload.old as Database["public"]["Tables"]["requests"]["Row"];
+              setRequests((prev) => prev.filter((request) => request.id !== deleted.id));
             }
           }
         )
@@ -126,7 +137,7 @@ function MyRequestsContent() {
     };
   }, []);
 
-  const visibleItems = items.filter((item) => matchesFilter(item, filter));
+  const visibleRequests = requests.filter((request) => matchesFilter(request, filter));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -167,29 +178,34 @@ function MyRequestsContent() {
       <div className="flex w-full flex-col items-start rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
         {loading ? (
           <p className="text-[14px] text-[#46464e]">Loading…</p>
-        ) : visibleItems.length === 0 ? (
+        ) : visibleRequests.length === 0 ? (
           <p className="text-[14px] text-[#46464e]">
             No {filter === "all" ? "" : `${filter} `}requests to show.
           </p>
         ) : (
           <div className="flex w-full flex-col gap-4">
-            {visibleItems.map((item) => (
+            {visibleRequests.map((request) => (
               <Link
-                key={item.id}
-                href={`/org/requests/${item.id}`}
+                key={request.id}
+                href={`/org/requests/${request.id}`}
                 className="flex flex-col gap-1 rounded-lg border border-[#c7c5cf] bg-[#f8f9fa] p-[17px] transition hover:border-[#11183c]"
               >
                 <div className="flex items-start justify-between">
-                  {urgencyBadge(item.urgency) ?? <span />}
-                  {statusBadge(item.status)}
+                  {urgencyBadge(request.urgency) ?? <span />}
+                  {statusBadge(request.status)}
                 </div>
                 <h4 className="pt-1 text-[20px] font-semibold text-[#191c1d]">
-                  {item.item_type} × {item.quantity}
+                  {formatItemsLabel(request.request_items)}
                 </h4>
-                {item.description && <p className="text-[16px] text-[#46464e]">{item.description}</p>}
-                <span className="pt-1 text-[12px] text-[#6b7280]">
-                  Submitted {new Date(item.created_at).toLocaleDateString()}
-                </span>
+                {request.description && <p className="text-[16px] text-[#46464e]">{request.description}</p>}
+                <div className="flex items-center gap-2 pt-1 text-[12px] text-[#6b7280]">
+                  <span>Submitted {new Date(request.created_at).toLocaleDateString()}</span>
+                  {tagLabel(request.tag) && (
+                    <span className="rounded-full bg-[#e7e8e9] px-2 py-0.5 text-[11px] font-medium text-[#46464e]">
+                      {tagLabel(request.tag)}
+                    </span>
+                  )}
+                </div>
               </Link>
             ))}
           </div>

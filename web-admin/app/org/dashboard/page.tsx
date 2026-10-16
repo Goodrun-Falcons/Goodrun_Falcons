@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../supabase/types";
+import { formatItemsLabel, type RequestItem } from "@/lib/requestItems";
 
-type Item = Database["public"]["Tables"]["items"]["Row"];
+type Request = Database["public"]["Tables"]["requests"]["Row"] & {
+  request_items: RequestItem[];
+};
 
 function ArrowIcon() {
   return (
@@ -58,7 +61,7 @@ function statusBadge(status: string) {
 
 export default function OrgDashboardPage() {
   const [orgName, setOrgName] = useState("");
-  const [items, setItems] = useState<Item[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,13 +78,13 @@ export default function OrgDashboardPage() {
         .maybeSingle();
       if (org) setOrgName(org.name);
 
-      const { data: orgItems } = await supabase
-        .from("items")
-        .select("*")
+      const { data: orgRequests } = await supabase
+        .from("requests")
+        .select("*, request_items(*)")
         .eq("organisation_id", user.id)
         .order("created_at", { ascending: false });
 
-      setItems(orgItems ?? []);
+      setRequests((orgRequests as Request[] | null) ?? []);
       setLoading(false);
     }
     load();
@@ -91,14 +94,14 @@ export default function OrgDashboardPage() {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const requestsThisMonth = items.filter((i) => new Date(i.created_at) >= startOfMonth).length;
-  const awaitingPickupCount = items.filter(
-    (i) => i.status === "pending" || i.status === "approved" || i.status === "accepted"
+  const requestsThisMonth = requests.filter((r) => new Date(r.created_at) >= startOfMonth).length;
+  const awaitingPickupCount = requests.filter(
+    (r) => r.status === "pending" || r.status === "approved" || r.status === "accepted"
   ).length;
-  const inTransitCount = items.filter((i) => i.status === "in_transit").length;
-  const deliveredCount = items.filter((i) => i.status === "delivered").length;
+  const inTransitCount = requests.filter((r) => r.status === "in_transit").length;
+  const deliveredCount = requests.filter((r) => r.status === "delivered").length;
   const activeCount = awaitingPickupCount + inTransitCount;
-  const recentItems = items.slice(0, 5);
+  const recentRequests = requests.slice(0, 5);
 
   if (loading) {
     return <div className="p-6 text-[#46464e]">Loading…</div>;
@@ -149,25 +152,25 @@ export default function OrgDashboardPage() {
           </Link>
         </div>
 
-        {recentItems.length === 0 ? (
+        {recentRequests.length === 0 ? (
           <p className="text-[14px] text-[#46464e]">
             No requests yet. Click &ldquo;+ New Request&rdquo; in the sidebar to submit your first one.
           </p>
         ) : (
           <div className="flex w-full flex-col gap-4">
-            {recentItems.map((item) => (
+            {recentRequests.map((request) => (
               <div
-                key={item.id}
+                key={request.id}
                 className="flex flex-col gap-1 rounded-lg border border-[#c7c5cf] bg-[#f8f9fa] p-[17px]"
               >
                 <div className="flex items-start justify-between">
-                  {urgencyBadge(item.urgency) ?? <span />}
-                  {statusBadge(item.status)}
+                  {urgencyBadge(request.urgency) ?? <span />}
+                  {statusBadge(request.status)}
                 </div>
                 <h4 className="pt-1 text-[20px] font-semibold text-[#191c1d]">
-                  {item.item_type} × {item.quantity}
+                  {formatItemsLabel(request.request_items)}
                 </h4>
-                {item.description && <p className="text-[16px] text-[#46464e]">{item.description}</p>}
+                {request.description && <p className="text-[16px] text-[#46464e]">{request.description}</p>}
               </div>
             ))}
           </div>

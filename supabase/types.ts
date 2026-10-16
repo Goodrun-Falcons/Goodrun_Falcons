@@ -60,7 +60,39 @@ export type Database = {
         }
         Relationships: []
       }
-      items: {
+      request_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_type: string
+          quantity: number
+          request_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_type: string
+          quantity?: number
+          request_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_type?: string
+          quantity?: number
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      requests: {
         Row: {
           created_at: string
           created_by_admin: boolean
@@ -69,13 +101,12 @@ export type Database = {
           dropoff_lng: number | null
           dropoff_location: unknown
           id: string
-          item_type: string
           organisation_id: string
           pickup_lat: number | null
           pickup_lng: number | null
           pickup_location: unknown
-          quantity: number
           status: string
+          tag: string | null
           urgency: string
         }
         Insert: {
@@ -86,13 +117,12 @@ export type Database = {
           dropoff_lng?: number | null
           dropoff_location?: unknown
           id?: string
-          item_type: string
           organisation_id: string
           pickup_lat?: number | null
           pickup_lng?: number | null
           pickup_location: unknown
-          quantity?: number
           status?: string
+          tag?: string | null
           urgency?: string
         }
         Update: {
@@ -103,18 +133,17 @@ export type Database = {
           dropoff_lng?: number | null
           dropoff_location?: unknown
           id?: string
-          item_type?: string
           organisation_id?: string
           pickup_lat?: number | null
           pickup_lng?: number | null
           pickup_location?: unknown
-          quantity?: number
           status?: string
+          tag?: string | null
           urgency?: string
         }
         Relationships: [
           {
-            foreignKeyName: "items_organisation_id_fkey"
+            foreignKeyName: "requests_organisation_id_fkey"
             columns: ["organisation_id"]
             isOneToOne: false
             referencedRelation: "organisations"
@@ -163,7 +192,7 @@ export type Database = {
           handover_photo_url: string | null
           handover_timestamp: string | null
           id: string
-          item_id: string
+          request_id: string
           route_id: string | null
           started_at: string | null
           status: string
@@ -176,7 +205,7 @@ export type Database = {
           handover_photo_url?: string | null
           handover_timestamp?: string | null
           id?: string
-          item_id: string
+          request_id: string
           route_id?: string | null
           started_at?: string | null
           status?: string
@@ -189,7 +218,7 @@ export type Database = {
           handover_photo_url?: string | null
           handover_timestamp?: string | null
           id?: string
-          item_id?: string
+          request_id?: string
           route_id?: string | null
           started_at?: string | null
           status?: string
@@ -204,10 +233,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pickups_item_id_fkey"
-            columns: ["item_id"]
+            foreignKeyName: "pickups_request_id_fkey"
+            columns: ["request_id"]
             isOneToOne: false
-            referencedRelation: "items"
+            referencedRelation: "requests"
             referencedColumns: ["id"]
           },
           {
