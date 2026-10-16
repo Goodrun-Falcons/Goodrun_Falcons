@@ -1,50 +1,108 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Keyboard , Modal , Pressable , ScrollView , StyleSheet , TextInput , View, } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
 
 import { ThemedText } from '@/components/themed-text';
 import { BrandColors, FontFamily, Radius, Spacing, } from '@/constants/theme';
+
+const PROFILE_URL = 'https://goodrun-backend.onrender.com/volunteers/me';
 
 type Profile = {
   fullName: string;
   email: string;
   phone: string;
-  serviceArea: string;
-  vehicleType: string;
+  preferredPackageSize: string;
 };
 
-
 const initialProfile: Profile = {
-  fullName: 'abcd efgh',
-  email: 'abcde@abcde.com',
-  phone: '+64 123456789',
-  serviceArea: 'Carlton',
-  vehicleType: 'SUV',
+  fullName: '',
+  email: '',
+  phone: '',
+  preferredPackageSize: '',
 };
 
 const fields: { key: keyof Profile; label: string }[] = [
   { key: 'fullName', label: 'Full Name' },
   { key: 'email', label: 'Email Address' },
   { key: 'phone', label: 'Phone Number' },
-  { key: 'serviceArea', label: 'Service Area' },
-  { key: 'vehicleType', label: 'Vehicle Type' },
+  { key: 'preferredPackageSize', label: 'Preferred Package Size' },
 ];
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
-  const [profile] = useState<Profile>(initialProfile);
+  const [profile, setProfile] = useState<Profile>(initialProfile);
   const [draft, setDraft] = useState<Profile>(initialProfile);
-  const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showLogout, setShowLogout] = useState(false);
 
-  const hasPendingRequest = pendingProfile !== null;
+  useEffect(() => {
+  let cancelled = false;
+
+  async function loadProfile() {
+    setError('');
+
+    try {
+      const token = await SecureStore.getItemAsync('accessToken');
+      if (cancelled) return;
+
+      if (!token) {
+        router.replace('/login');
+        return;
+      }
+
+      const response = await fetch(PROFILE_URL, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (cancelled) return;
+
+      if (response.status === 401) {
+        setError('Your session has expired. Please log in again.');
+        return;
+      }
+
+      if (!response.ok) {
+        setError('Unable to load your profile. Please try again.');
+        return;
+      }
+
+      const data = await response.json();
+      if (cancelled) return;
+
+      const loadedProfile: Profile = {
+        fullName: data.full_name ?? '',
+        email: data.email ?? '',
+        phone: data.phone ?? '',
+        preferredPackageSize: data.preferred_package_size ?? '',
+      };
+
+      setProfile(loadedProfile);
+      setDraft({ ...loadedProfile });
+    } catch {
+      if (!cancelled) {
+        setError('Unable to connect to the server. Please try again.');
+      }
+    }
+  }
+
+  loadProfile();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
+
   const values = isEditing ? draft : profile;
 
   //extract capitalized first letters of surname and given name
@@ -67,7 +125,7 @@ export default function ProfileScreen() {
   }
 
   function startEditing() {
-    if (hasPendingRequest) return;
+    if (isSaving) return;
 
     setDraft({ ...profile });
     setError('');
@@ -84,47 +142,90 @@ export default function ProfileScreen() {
     Keyboard.dismiss();
   }
 
-  function submitProfileRequest() {
-    if (hasPendingRequest) return;
+  const submitProfileRequest = async () => {
+    if (isSaving) return;
 
-    const requestedProfile: Profile = {
-      fullName: draft.fullName.trim(),
-      email: draft.email.trim(),
-      phone: draft.phone.trim(),
-      serviceArea: draft.serviceArea.trim(),
-      vehicleType: draft.vehicleType.trim(),
-    };
+    const phone = draft.phone.replace(/[\s()-]/g, '');
+    const preferredPackageSize = draft.preferredPackageSize;
 
-    if (
-      Object.values(requestedProfile).some((value) => !value)
-    ) {
-      setError('Please complete all fields.');
-      return;
-    }
-
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requestedProfile.email)
-    ) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    const hasChanges = fields.some(
-      ({ key }) => requestedProfile[key] !== profile[key]
-    );
-
-    if (!hasChanges) {
-      setError('Please make a change before submitting.');
-      return;
-    }
-
-    setPendingProfile({ ...requestedProfile });
-    setDraft({ ...profile });
-    setIsEditing(false);
     setError('');
     setNotice('');
+
+    if (!phone) {
+      setError('Please enter your phone number.');
+      return;
+    }
+
+    if (!/^(?:04\d{8}|\+614\d{8})$/.test(phone)) {
+      setError('Please enter a valid Australian mobile number (04xxxxxxxx or +614xxxxxxxx).');
+      return;
+    }
+
+    if (!['small', 'medium', 'large'].includes(preferredPackageSize)) {
+      setError('Please select a preferred package size.');
+      return;
+    }
+
+    if (
+      phone === profile.phone &&
+      preferredPackageSize === profile.preferredPackageSize
+    ) {
+      setError('You have not made any changes.');
+      return;
+    }
+
+    setIsSaving(true);
     Keyboard.dismiss();
-  }
+
+    try {
+      const token = await SecureStore.getItemAsync('accessToken');
+
+      if (!token) {
+        setError('Your session has expired. Please log in again.');
+        return;
+      }
+
+      const response = await fetch(PROFILE_URL, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone,
+          preferred_package_size: preferredPackageSize,
+        }),
+      });
+
+      if (response.status === 401) {
+        setError('Your session has expired. Please log in again.');
+        return;
+      }
+
+      if (!response.ok) {
+        setError('Unable to save your profile. Please try again.');
+        return;
+      }
+
+      const data = await response.json();
+
+      const updatedProfile: Profile = {
+        ...profile,
+        phone: data.phone ?? phone,
+        preferredPackageSize:
+          data.preferred_package_size ?? preferredPackageSize,
+      };
+
+      setProfile(updatedProfile);
+      setDraft({ ...updatedProfile });
+      setIsEditing(false);
+      setNotice('Your profile has been updated.');
+    } catch {
+      setError('Unable to connect to the server. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   function openLogoutConfirmation() {
     Keyboard.dismiss();
@@ -132,10 +233,22 @@ export default function ProfileScreen() {
     setShowLogout(true);
   }
 
-  function logout() {
+  
+  
+  async function logout() {
     setShowLogout(false);
-    router.replace('/login');
+
+    try {
+      await SecureStore.deleteItemAsync('accessToken');
+      await SecureStore.deleteItemAsync('refreshToken');
+
+      router.replace('/login');
+    } catch (error) {
+      console.error('Failed to clear authentication tokens:', error);
+      setError('Unable to log out. Please try again.');
+    }
   }
+
 
   return (
     <View style={styles.container}>
@@ -176,25 +289,6 @@ export default function ProfileScreen() {
                   {initials}
                 </ThemedText>
               </View>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Change profile photo"
-                onPress={() =>
-                  setNotice(
-                    'Profile photo upload is not available yet.'
-                  )
-                }
-                style={({ pressed }) => [
-                  styles.cameraButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <View style={styles.cameraBody}>
-                  <View style={styles.cameraTop} />
-                  <View style={styles.cameraLens} />
-                </View>
-              </Pressable>
             </View>
 
             <ThemedText type="heading" style={styles.name}>
@@ -219,110 +313,83 @@ export default function ProfileScreen() {
         >
           <View style={styles.informationCard}>
             <ThemedText type="smallBold" style={styles.label}>
-              {isEditing
-                ? 'Request Profile Change'
-                : 'Approved Profile'}
+              {isEditing ? 'Edit Profile' : 'My Profile'}
             </ThemedText>
 
             <ThemedText style={styles.informationText}>
-              {isEditing
-                ? 'Enter your proposed changes below. Your current details will remain active until an admin approves your request.'
-                : 'These are your currently approved details. Changes require admin approval.'}
-            </ThemedText>
-
-            <ThemedText style={styles.previewText}>
-              Preview only: requests are not sent to an admin
-              and will be lost when this page is reloaded.
+              You can update your phone number and preferred package size.
+              Your name and email address cannot be changed here.
             </ThemedText>
           </View>
 
           {fields.map(({ key, label }) => (
             <View key={key} style={styles.field}>
-              <ThemedText
-                type="smallBold"
-                style={styles.label}
-              >
+              <ThemedText type="smallBold" style={styles.label}>
                 {label}
               </ThemedText>
 
-              <TextInput
-                accessibilityLabel={label}
-                value={values[key]}
-                editable={isEditing && !hasPendingRequest}
-                onChangeText={(value) => {
-                  setDraft((previous) => ({
-                    ...previous,
-                    [key]: value,
-                  }));
-                  setError('');
-                }}
-                keyboardType={
-                  key === 'email'
-                    ? 'email-address'
-                    : key === 'phone'
-                      ? 'phone-pad'
-                      : 'default'
-                }
-                autoCapitalize={
-                  key === 'email' ? 'none' : 'words'
-                }
-                autoCorrect={
-                  key !== 'email' && key !== 'phone'
-                }
-                selectionColor={BrandColors.navy}
-                underlineColorAndroid="transparent"
-                style={[
-                  styles.input,
-                  isEditing && styles.editableInput,
-                ]}
-              />
+              {key === 'preferredPackageSize' && isEditing ? (
+                <View style={styles.sizeOptions}>
+                  {['small', 'medium', 'large'].map((size) => (
+                    <Pressable
+                      key={size}
+                      disabled={isSaving}
+                      accessibilityRole="radio"
+                      accessibilityState={{
+                        checked: draft.preferredPackageSize === size,
+                        disabled: isSaving,
+                      }}
+                      onPress={() => {
+                        setDraft((previous) => ({
+                          ...previous,
+                          preferredPackageSize: size,
+                        }));
+                        setError('');
+                      }}
+                      style={[
+                        styles.sizeOption,
+                        draft.preferredPackageSize === size &&
+                          styles.selectedSizeOption,
+                      ]}
+                    >
+                      <ThemedText
+                        style={{
+                          color:
+                            draft.preferredPackageSize === size
+                              ? BrandColors.white
+                              : BrandColors.navy,
+                        }}
+                      >
+                        {size}
+                      </ThemedText>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <TextInput
+                  accessibilityLabel={label}
+                  value={values[key]}
+                  editable={isEditing && !isSaving && key === 'phone'}
+                  onChangeText={(value) => {
+                    setDraft((previous) => ({
+                      ...previous,
+                      [key]: value,
+                    }));
+                    setError('');
+                  }}
+                  keyboardType={key === 'phone' ? 'phone-pad' : 'default'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  selectionColor={BrandColors.navy}
+                  underlineColorAndroid="transparent"
+                  style={[
+                    styles.input,
+                    isEditing && key === 'phone' && styles.editableInput,
+                  ]}
+                />
+              )}
             </View>
           ))}
-
-          {pendingProfile && (
-            <View style={styles.reviewCard}>
-              <ThemedText
-                type="smallBold"
-                style={styles.label}
-                accessibilityLiveRegion="polite"
-              >
-                Pending Review — Preview
-              </ThemedText>
-
-              <ThemedText style={styles.informationText}>
-                Your approved profile above is unchanged.
-                The following changes are awaiting review
-                in this preview.
-              </ThemedText>
-
-              {fields
-                .filter(
-                  ({ key }) =>
-                    pendingProfile[key] !== profile[key]
-                )
-                .map(({ key, label }) => (
-                  <View
-                    key={key}
-                    style={styles.requestedField}
-                  >
-                    <ThemedText
-                      type="smallBold"
-                      style={styles.label}
-                    >
-                      {label}
-                    </ThemedText>
-
-                    <ThemedText style={styles.requestedText}>
-                      Current: {profile[key]}
-                    </ThemedText>
-
-                    <ThemedText style={styles.requestedText}>
-                      Requested: {pendingProfile[key]}
-                    </ThemedText>
-                  </View>
-                ))}
-            </View>
-          )}
 
           {!!error && (
             <ThemedText
@@ -345,37 +412,30 @@ export default function ProfileScreen() {
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{
-                disabled: hasPendingRequest,
-              }}
-              disabled={hasPendingRequest}
+              disabled={isSaving}
+              accessibilityState={{ disabled: isSaving }}
               onPress={
                 isEditing
                   ? submitProfileRequest
                   : startEditing
               }
+              
               style={({ pressed }) => [
                 styles.button,
                 styles.primaryButton,
-                hasPendingRequest && styles.disabledButton,
+                isSaving && styles.disabledButton,
                 pressed &&
-                  !hasPendingRequest &&
+                  !isSaving &&
                   styles.pressed,
               ]}
             >
-              <ThemedText
-                type="smallBold"
-                style={styles.whiteText}
-              >
-                {hasPendingRequest
-                  ? 'Pending Review'
-                  : isEditing
-                    ? 'Submit for Review'
-                    : 'Request Profile Change'}
+              <ThemedText type="smallBold" style={styles.primaryButtonText}>
+                {isSaving ? 'Saving...' : isEditing ? 'Save Changes' : 'Edit Profile'}
               </ThemedText>
             </Pressable>
 
             <Pressable
+              disabled={isSaving}
               accessibilityRole="button"
               onPress={
                 isEditing
@@ -507,8 +567,8 @@ const styles = StyleSheet.create({
   },
 
   avatarContainer: {
-    width: 104,
-    height: 104,
+    width: 96,
+    height: 96,
     marginBottom: Spacing.md,
   },
 
@@ -622,7 +682,7 @@ const styles = StyleSheet.create({
 
   input: {
     minHeight: 44,
-    borderWidth: 1.5,
+    borderWidth: 0,
     borderColor: BrandColors.navy,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.md,
@@ -635,6 +695,7 @@ const styles = StyleSheet.create({
   },
 
   editableInput: {
+    borderWidth: 1.5,
     borderColor: BrandColors.red,
   },
 
@@ -737,5 +798,29 @@ const styles = StyleSheet.create({
     color: BrandColors.navy,
     marginTop: Spacing.sm,
     marginBottom: Spacing.md,
+  },
+
+  sizeOptions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+
+  sizeOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: BrandColors.red,
+    borderRadius: Radius.full,
+  },
+
+  selectedSizeOption: {
+    backgroundColor: BrandColors.red,
+  },
+
+  primaryButtonText: {
+    color: BrandColors.white,
   },
 });
