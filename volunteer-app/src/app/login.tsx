@@ -17,7 +17,7 @@ export default function LoginScreen() {
 
     async function handleLogin() {
         if(email.trim() === '' || password === ''){
-            setErrorMessage('Please enter your email address and password.');
+            setErrorMessage('Please enter your email address and password.(04xxxxxxxx or 4xxxxxxxx)');
             return;
         }
 
