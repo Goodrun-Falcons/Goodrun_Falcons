@@ -34,6 +34,8 @@ const packageOptions = [
 
 const PROFILE_URL = 'https://goodrun-backend.onrender.com/volunteers/me';
 
+const PROFILE_URL = 'https://goodrun-backend.onrender.com/volunteers/me';
+
 type Profile = {
   fullName: string;
   email: string;
@@ -273,6 +275,7 @@ export default function ProfileScreen() {
       setError('Unable to log out. Please try again.');
     }
   }
+
 
   return (
     <View style={styles.container}>
@@ -549,6 +552,7 @@ export default function ProfileScreen() {
               <ThemedText style={styles.primaryButtonText}>Log out</ThemedText>
             </Pressable>
             <Pressable
+              disabled={isSaving}
               accessibilityRole="button"
               onPress={() => setShowLogout(false)}
               style={({ pressed }) => [
