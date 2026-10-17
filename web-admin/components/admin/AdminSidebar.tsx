@@ -258,10 +258,7 @@ export default function AdminSidebar() {
 
       {/* Footer Nav */}
       <div className="flex flex-col border-t border-[#3E446B] pt-2">
-        <Link href="/admin/support" className="flex items-center gap-3 px-4 py-3">
-          <SupportIcon />
-          <span className="text-[12px] font-medium leading-4 text-[rgba(227,225,235,0.7)]">Support</span>
-        </Link>
+        {/* /admin/support redirects to /admin/support-tickets — only one entry kept */}
         <Link href="/logout" className="flex items-center gap-4 rounded-lg px-4 py-3">
           <LogoutIcon />
           <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-[rgba(227,225,235,0.7)]">

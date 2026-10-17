@@ -1,97 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ActiveOrg {
+interface SignupRequest {
   id: string;
-  status: "Active";
+  auth_user_id: string;
   name: string;
-  dateJoined: string;
-  contact: string;
-  contactInitials: string;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
 }
 
-interface PendingOrg {
-  id: string;
-  status: "Unapproved";
-  name: string;
-  requestDate: string;
-}
-
-interface InactiveOrg {
+interface Organisation {
   id: string;
   name: string;
-  dateClosed: string;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  active: boolean;
+  created_at: string;
 }
 
-// ─── Static data ──────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const ACTIVE_ORGS: ActiveOrg[] = [
-  {
-    id: "#ORG-0001",
-    status: "Active",
-    name: "Regional Community Vet Clinic",
-    dateJoined: "Oct 12 • 14:30",
-    contact: "J. Smith",
-    contactInitials: "JS",
-  },
-  {
-    id: "#ORG-0002",
-    status: "Active",
-    name: "McIntyre Wildlife Shelter",
-    dateJoined: "Oct 12 • 15:15",
-    contact: "A. Chen",
-    contactInitials: "AC",
-  },
-  {
-    id: "#ORG-0003",
-    status: "Active",
-    name: "The Dziko Project",
-    dateJoined: "Oct 12 • 14:30",
-    contact: "M. Davis",
-    contactInitials: "MD",
-  },
-];
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }) +
+    " • " +
+    d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false })
+  );
+}
 
-const PENDING_ORGS: PendingOrg[] = [
-  {
-    id: "#ORG-0077",
-    status: "Unapproved",
-    name: "Northern Rivers Wildlife Hospital",
-    requestDate: "Oct 12 • 16:00",
-  },
-  {
-    id: "#ORG-0078",
-    status: "Unapproved",
-    name: "The Rescue Collective Inc",
-    requestDate: "Oct 13 • 09:00",
-  },
-];
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
 
-const INACTIVE_ORGS: InactiveOrg[] = [
-  { id: "#ORG-0010", name: "Blue Mountains Animal Rescue", dateClosed: "Sep 3 • 09:00" },
-  { id: "#ORG-0015", name: "Coastal Wildlife Sanctuary", dateClosed: "Aug 18 • 11:00" },
-  { id: "#ORG-0021", name: "Riverland Vet Co-op", dateClosed: "Jul 30 • 13:45" },
-  { id: "#ORG-0034", name: "Hunter Valley Fauna Care", dateClosed: "Jul 12 • 10:00" },
-];
-
-// ─── Icon components ──────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function SearchIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 text-[#6b7280]">
       <circle cx="9" cy="9" r="7" stroke="#6b7280" strokeWidth="1.5" />
       <path d="M14 14l4 4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-      <path d="M5.5 1v9M1 5.5h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
@@ -112,33 +74,45 @@ function ChevronDownIcon({ open }: { open: boolean }) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: "Active" | "Unapproved" }) {
-  if (status === "Active") {
-    return (
-      <div className="flex items-center gap-1.5 rounded-[2px] bg-[rgba(17,24,60,0.1)] px-2 py-1">
-        <span className="size-1.5 rounded-full bg-[#11183c]" />
-        <span className="text-[11px] font-bold leading-[16.5px] text-[#11183c]">Active</span>
-      </div>
-    );
-  }
+function StatusBadge({ status }: { status: "Active" | "Unapproved" | "Inactive" }) {
+  const cfg: Record<typeof status, { dot: string; text: string; bg: string; label: string }> = {
+    Active: {
+      dot: "bg-[#11183c]",
+      text: "text-[#11183c]",
+      bg: "bg-[rgba(17,24,60,0.1)]",
+      label: "Active",
+    },
+    Unapproved: {
+      dot: "bg-[#b9100b]",
+      text: "text-[#b9100b]",
+      bg: "bg-[rgba(185,16,11,0.1)]",
+      label: "Unapproved",
+    },
+    Inactive: {
+      dot: "bg-[#5c403b]",
+      text: "text-[#5c403b]",
+      bg: "bg-[rgba(92,64,59,0.1)]",
+      label: "Inactive",
+    },
+  };
+  const c = cfg[status];
   return (
-    <div className="flex items-center gap-1.5 rounded-[2px] bg-[rgba(185,16,11,0.1)] px-2 py-1">
-      <span className="size-1.5 rounded-full bg-[#b9100b]" />
-      <span className="text-[11px] font-bold leading-[16.5px] text-[#b9100b]">Unapproved</span>
+    <div className={`flex items-center gap-1.5 rounded-[2px] px-2 py-1 ${c.bg}`}>
+      <span className={`size-1.5 rounded-full ${c.dot}`} />
+      <span className={`text-[11px] font-bold leading-[16.5px] ${c.text}`}>{c.label}</span>
     </div>
   );
 }
 
-function ContactAvatar({ initials }: { initials: string }) {
+function ContactAvatar({ name }: { name: string }) {
   return (
     <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#e5bdb7] bg-[#BEC4F1] text-[9px] font-semibold text-[#11183c]">
-      {initials}
+      {initials(name)}
     </div>
   );
 }
 
 function AccordionHeader({
-  dot,
   dotColor,
   title,
   count,
@@ -147,7 +121,6 @@ function AccordionHeader({
   open,
   onToggle,
 }: {
-  dot: string;
   dotColor: string;
   title: string;
   count: number;
@@ -177,8 +150,8 @@ function AccordionHeader({
   );
 }
 
-const TABLE_HEADER_CELL = "text-[12px] font-bold uppercase tracking-[0.6px] text-[#5c403b] leading-4";
-const TABLE_CELL_BASE = "flex items-center";
+const TH = "text-[12px] font-bold uppercase tracking-[0.6px] text-[#5c403b] leading-4";
+const TC = "flex items-center";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -187,6 +160,174 @@ export default function OrganisationRequestsPage() {
   const [pendingOpen, setPendingOpen] = useState(true);
   const [inactiveOpen, setInactiveOpen] = useState(false);
   const [search, setSearch] = useState("");
+
+  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([]);
+  const [organisations, setOrganisations] = useState<Organisation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const [{ data: reqs }, { data: orgs }] = await Promise.all([
+      supabase
+        .from("signup_requests")
+        .select("id, auth_user_id, name, email, phone, address, status, created_at")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("organisations")
+        .select("id, name, email, phone, address, active, created_at")
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (reqs) setSignupRequests(reqs as SignupRequest[]);
+    if (orgs) setOrganisations(orgs as Organisation[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleApprove(req: SignupRequest) {
+    setActionLoading(req.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Step 1: Insert into organisations (id must equal auth_user_id so org login works)
+      const { error: insertErr } = await supabase.from("organisations").upsert({
+        id: req.auth_user_id,
+        name: req.name,
+        email: req.email,
+        phone: req.phone,
+        address: req.address,
+        verified: true,
+        active: true,
+      });
+
+      if (insertErr) {
+        alert("Failed to create organisation: " + insertErr.message);
+        return;
+      }
+
+      // Step 2: Mark signup request as approved
+      const { error: updateErr } = await supabase
+        .from("signup_requests")
+        .update({
+          status: "approved",
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq("id", req.id);
+
+      if (updateErr) {
+        alert("Failed to update signup request: " + updateErr.message);
+        return;
+      }
+
+      await load();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleReject(req: SignupRequest) {
+    setActionLoading(req.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("signup_requests")
+        .update({
+          status: "rejected",
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq("id", req.id);
+
+      if (error) {
+        alert("Failed to reject signup request: " + error.message);
+        return;
+      }
+
+      await load();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleDeactivate(org: Organisation) {
+    setActionLoading(org.id);
+    try {
+      const { error } = await supabase
+        .from("organisations")
+        .update({ active: false })
+        .eq("id", org.id);
+
+      if (error) {
+        alert("Failed to deactivate organisation: " + error.message);
+        return;
+      }
+
+      setOrganisations((prev) =>
+        prev.map((o) => (o.id === org.id ? { ...o, active: false } : o))
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleReactivate(org: Organisation) {
+    setActionLoading(org.id);
+    try {
+      const { error } = await supabase
+        .from("organisations")
+        .update({ active: true })
+        .eq("id", org.id);
+
+      if (error) {
+        alert("Failed to reactivate organisation: " + error.message);
+        return;
+      }
+
+      setOrganisations((prev) =>
+        prev.map((o) => (o.id === org.id ? { ...o, active: true } : o))
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const searchLower = search.toLowerCase();
+
+  const activeOrgs = organisations.filter(
+    (o) =>
+      o.active &&
+      (o.name.toLowerCase().includes(searchLower) ||
+        o.email.toLowerCase().includes(searchLower))
+  );
+
+  const inactiveOrgs = organisations.filter(
+    (o) =>
+      !o.active &&
+      (o.name.toLowerCase().includes(searchLower) ||
+        o.email.toLowerCase().includes(searchLower))
+  );
+
+  const pendingReqs = signupRequests.filter(
+    (r) =>
+      r.status === "pending" &&
+      (r.name.toLowerCase().includes(searchLower) ||
+        r.email.toLowerCase().includes(searchLower))
+  );
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <span className="text-[14px] text-[#5C403B]">Loading organisations…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -202,14 +343,6 @@ export default function OrganisationRequestsPage() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="flex h-10 items-center gap-2 rounded-[2px] bg-[#b9100b] px-4 py-1.5 text-[16px] leading-6 text-white"
-        >
-          <PlusIcon />
-          New Organisation
-        </button>
-
         <div className="relative">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2">
             <SearchIcon />
@@ -218,10 +351,17 @@ export default function OrganisationRequestsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search ID or Organisation"
+            placeholder="Search name or email"
             className="h-10 w-64 rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] pl-8 pr-3 text-[12px] font-medium text-[#1b1b22] placeholder:text-[#6b7280] focus:outline-none focus:ring-1 focus:ring-[#b9100b]"
           />
         </div>
+        <button
+          type="button"
+          onClick={load}
+          className="flex h-10 items-center rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] px-4 text-[12px] font-medium text-[#1b1b22] transition-colors hover:bg-[rgba(17,24,60,0.04)]"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Accordion Container */}
@@ -231,10 +371,9 @@ export default function OrganisationRequestsPage() {
         <div className="overflow-hidden rounded-[4px] border border-[#e5bdb7] bg-white">
           <div className="bg-[#f5f2fc]">
             <AccordionHeader
-              dot="#11183c"
               dotColor="#11183c"
               title="Active Organisations"
-              count={ACTIVE_ORGS.length}
+              count={activeOrgs.length}
               countBg="rgba(17,24,60,0.1)"
               countColor="#11183c"
               open={activeOpen}
@@ -244,50 +383,49 @@ export default function OrganisationRequestsPage() {
 
           {activeOpen && (
             <div>
-              {/* Table header */}
               <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Org ID</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Status</span>
-                </div>
-                <div className="col-span-4">
-                  <span className={TABLE_HEADER_CELL}>Org Name</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Date Joined</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Contact</span>
-                </div>
+                <div className="col-span-2"><span className={TH}>Status</span></div>
+                <div className="col-span-4"><span className={TH}>Org Name</span></div>
+                <div className="col-span-3"><span className={TH}>Email</span></div>
+                <div className="col-span-2"><span className={TH}>Date Joined</span></div>
+                <div className="col-span-1"><span className={TH}>Action</span></div>
               </div>
 
-              {/* Rows */}
-              {ACTIVE_ORGS.map((org, idx) => (
-                <div
-                  key={org.id}
-                  className="grid grid-cols-12 gap-4 px-3 py-3"
-                  style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
-                >
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[12px] font-bold tracking-[0.6px] text-[#1b1b22]">{org.id}</span>
+              {activeOrgs.length === 0 ? (
+                <div className="py-8 text-center text-[13px] text-[#5c403b]">No active organisations</div>
+              ) : (
+                activeOrgs.map((org, idx) => (
+                  <div
+                    key={org.id}
+                    className="grid grid-cols-12 gap-4 px-3 py-3"
+                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                  >
+                    <div className={`col-span-2 ${TC}`}>
+                      <StatusBadge status="Active" />
+                    </div>
+                    <div className={`col-span-4 ${TC} gap-2 overflow-hidden`}>
+                      <ContactAvatar name={org.name} />
+                      <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{org.name}</span>
+                    </div>
+                    <div className={`col-span-3 ${TC} overflow-hidden`}>
+                      <span className="truncate text-[12px] text-[#5c403b]">{org.email}</span>
+                    </div>
+                    <div className={`col-span-2 ${TC}`}>
+                      <span className="text-[13px] leading-[18px] text-[#5c403b]">{formatDate(org.created_at)}</span>
+                    </div>
+                    <div className={`col-span-1 ${TC}`}>
+                      <button
+                        type="button"
+                        disabled={actionLoading === org.id}
+                        onClick={() => handleDeactivate(org)}
+                        className="text-[11px] font-bold tracking-[0.6px] text-[#b9100b] hover:underline disabled:opacity-50"
+                      >
+                        {actionLoading === org.id ? "…" : "Deactivate"}
+                      </button>
+                    </div>
                   </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <StatusBadge status={org.status} />
-                  </div>
-                  <div className={`col-span-4 ${TABLE_CELL_BASE} overflow-hidden`}>
-                    <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{org.name}</span>
-                  </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[13px] leading-[18px] text-[#5c403b]">{org.dateJoined}</span>
-                  </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE} gap-2`}>
-                    <ContactAvatar initials={org.contactInitials} />
-                    <span className="text-[12px] font-medium leading-4 text-[#1b1b22]">{org.contact}</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
@@ -296,10 +434,9 @@ export default function OrganisationRequestsPage() {
         <div className="overflow-hidden rounded-[4px] border border-[#e5bdb7] bg-white">
           <div className="bg-[#f5f2fc]">
             <AccordionHeader
-              dot="#b9100b"
               dotColor="#b9100b"
               title="Pending Approval"
-              count={PENDING_ORGS.length}
+              count={pendingReqs.length}
               countBg="rgba(185,16,11,0.1)"
               countColor="#b9100b"
               open={pendingOpen}
@@ -309,68 +446,69 @@ export default function OrganisationRequestsPage() {
 
           {pendingOpen && (
             <div>
-              {/* Table header */}
               <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Org ID</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Status</span>
-                </div>
-                <div className="col-span-4">
-                  <span className={TABLE_HEADER_CELL}>Org Name</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Request Date</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Action</span>
-                </div>
+                <div className="col-span-2"><span className={TH}>Status</span></div>
+                <div className="col-span-3"><span className={TH}>Org Name</span></div>
+                <div className="col-span-3"><span className={TH}>Email</span></div>
+                <div className="col-span-2"><span className={TH}>Request Date</span></div>
+                <div className="col-span-2"><span className={TH}>Actions</span></div>
               </div>
 
-              {/* Rows */}
-              {PENDING_ORGS.map((org, idx) => (
-                <div
-                  key={org.id}
-                  className="grid grid-cols-12 gap-4 px-3 py-3"
-                  style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
-                >
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[12px] font-bold tracking-[0.6px] text-[#1b1b22]">{org.id}</span>
+              {pendingReqs.length === 0 ? (
+                <div className="py-8 text-center text-[13px] text-[#5c403b]">No pending signup requests</div>
+              ) : (
+                pendingReqs.map((req, idx) => (
+                  <div
+                    key={req.id}
+                    className="grid grid-cols-12 gap-4 px-3 py-3"
+                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                  >
+                    <div className={`col-span-2 ${TC}`}>
+                      <StatusBadge status="Unapproved" />
+                    </div>
+                    <div className={`col-span-3 ${TC} overflow-hidden`}>
+                      <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{req.name}</span>
+                    </div>
+                    <div className={`col-span-3 ${TC} overflow-hidden`}>
+                      <span className="truncate text-[12px] text-[#5c403b]">{req.email}</span>
+                    </div>
+                    <div className={`col-span-2 ${TC}`}>
+                      <span className="text-[13px] leading-[18px] text-[#5c403b]">{formatDate(req.created_at)}</span>
+                    </div>
+                    <div className={`col-span-2 ${TC} gap-2`}>
+                      <button
+                        type="button"
+                        disabled={actionLoading === req.id}
+                        onClick={() => handleApprove(req)}
+                        className="flex h-7 items-center rounded-[2px] bg-[#2e7d32] px-2.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+                      >
+                        {actionLoading === req.id ? "…" : "Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actionLoading === req.id}
+                        onClick={() => handleReject(req)}
+                        className="flex h-7 items-center rounded-[2px] bg-[#b9100b] px-2.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+                      >
+                        {actionLoading === req.id ? "…" : "Reject"}
+                      </button>
+                    </div>
                   </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <StatusBadge status={org.status} />
-                  </div>
-                  <div className={`col-span-4 ${TABLE_CELL_BASE} overflow-hidden`}>
-                    <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{org.name}</span>
-                  </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[13px] leading-[18px] text-[#5c403b]">{org.requestDate}</span>
-                  </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <button
-                      type="button"
-                      className="text-[12px] font-bold tracking-[0.6px] text-[#8f0002]"
-                    >
-                      Approve / Reject
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
 
-        {/* ── Inactive ── */}
+        {/* ── Inactive Organisations ── */}
         <div className="overflow-hidden rounded-[4px] border border-[#e5bdb7] bg-white">
           <div className="bg-[#f5f2fc]">
             <AccordionHeader
-              dot="#2e7d32"
-              dotColor="#2e7d32"
-              title="Inactive"
-              count={INACTIVE_ORGS.length}
-              countBg="rgba(46,125,50,0.1)"
-              countColor="#2e7d32"
+              dotColor="#5c403b"
+              title="Inactive Organisations"
+              count={inactiveOrgs.length}
+              countBg="rgba(92,64,59,0.1)"
+              countColor="#5c403b"
               open={inactiveOpen}
               onToggle={() => setInactiveOpen((v) => !v)}
             />
@@ -378,37 +516,44 @@ export default function OrganisationRequestsPage() {
 
           {inactiveOpen && (
             <div>
-              {/* Table header */}
               <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Org ID</span>
-                </div>
-                <div className="col-span-6">
-                  <span className={TABLE_HEADER_CELL}>Org Name</span>
-                </div>
-                <div className="col-span-4">
-                  <span className={TABLE_HEADER_CELL}>Date Closed</span>
-                </div>
+                <div className="col-span-2"><span className={TH}>Status</span></div>
+                <div className="col-span-4"><span className={TH}>Org Name</span></div>
+                <div className="col-span-4"><span className={TH}>Email</span></div>
+                <div className="col-span-2"><span className={TH}>Action</span></div>
               </div>
 
-              {/* Rows */}
-              {INACTIVE_ORGS.map((org, idx) => (
-                <div
-                  key={org.id}
-                  className="grid grid-cols-12 gap-4 px-3 py-3"
-                  style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
-                >
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[12px] font-bold tracking-[0.6px] text-[#1b1b22]">{org.id}</span>
+              {inactiveOrgs.length === 0 ? (
+                <div className="py-8 text-center text-[13px] text-[#5c403b]">No inactive organisations</div>
+              ) : (
+                inactiveOrgs.map((org, idx) => (
+                  <div
+                    key={org.id}
+                    className="grid grid-cols-12 gap-4 px-3 py-3"
+                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                  >
+                    <div className={`col-span-2 ${TC}`}>
+                      <StatusBadge status="Inactive" />
+                    </div>
+                    <div className={`col-span-4 ${TC} overflow-hidden`}>
+                      <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{org.name}</span>
+                    </div>
+                    <div className={`col-span-4 ${TC} overflow-hidden`}>
+                      <span className="truncate text-[12px] text-[#5c403b]">{org.email}</span>
+                    </div>
+                    <div className={`col-span-2 ${TC}`}>
+                      <button
+                        type="button"
+                        disabled={actionLoading === org.id}
+                        onClick={() => handleReactivate(org)}
+                        className="text-[11px] font-bold tracking-[0.6px] text-[#2e7d32] hover:underline disabled:opacity-50"
+                      >
+                        {actionLoading === org.id ? "…" : "Reactivate"}
+                      </button>
+                    </div>
                   </div>
-                  <div className={`col-span-6 ${TABLE_CELL_BASE} overflow-hidden`}>
-                    <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{org.name}</span>
-                  </div>
-                  <div className={`col-span-4 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[13px] leading-[18px] text-[#5c403b]">{org.dateClosed}</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>

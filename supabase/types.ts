@@ -10,32 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -60,99 +35,9 @@ export type Database = {
         }
         Relationships: []
       }
-      request_items: {
-        Row: {
-          created_at: string
-          id: string
-          item_type: string
-          quantity: number
-          request_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          item_type: string
-          quantity?: number
-          request_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          item_type?: string
-          quantity?: number
-          request_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "request_items_request_id_fkey"
-            columns: ["request_id"]
-            isOneToOne: false
-            referencedRelation: "requests"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      requests: {
-        Row: {
-          created_at: string
-          created_by_admin: boolean
-          description: string | null
-          dropoff_lat: number | null
-          dropoff_lng: number | null
-          dropoff_location: unknown
-          id: string
-          organisation_id: string
-          pickup_lat: number | null
-          pickup_lng: number | null
-          pickup_location: unknown
-          status: string
-          tag: string | null
-          urgency: string
-        }
-        Insert: {
-          created_at?: string
-          created_by_admin?: boolean
-          description?: string | null
-          dropoff_lat?: number | null
-          dropoff_lng?: number | null
-          dropoff_location?: unknown
-          id?: string
-          organisation_id: string
-          pickup_lat?: number | null
-          pickup_lng?: number | null
-          pickup_location: unknown
-          status?: string
-          tag?: string | null
-          urgency?: string
-        }
-        Update: {
-          created_at?: string
-          created_by_admin?: boolean
-          description?: string | null
-          dropoff_lat?: number | null
-          dropoff_lng?: number | null
-          dropoff_location?: unknown
-          id?: string
-          organisation_id?: string
-          pickup_lat?: number | null
-          pickup_lng?: number | null
-          pickup_location?: unknown
-          status?: string
-          tag?: string | null
-          urgency?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "requests_organisation_id_fkey"
-            columns: ["organisation_id"]
-            isOneToOne: false
-            referencedRelation: "organisations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       organisations: {
         Row: {
+          active: boolean
           address: string | null
           created_at: string
           email: string
@@ -160,19 +45,29 @@ export type Database = {
           location: unknown
           name: string
           phone: string | null
+          security_answer_1_hash: string | null
+          security_answer_2_hash: string | null
+          security_question_1: string | null
+          security_question_2: string | null
           verified: boolean
         }
         Insert: {
+          active?: boolean
           address?: string | null
           created_at?: string
           email: string
           id: string
           location?: unknown
-          name: string
+          name?: string
           phone?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           verified?: boolean
         }
         Update: {
+          active?: boolean
           address?: string | null
           created_at?: string
           email?: string
@@ -180,6 +75,10 @@ export type Database = {
           location?: unknown
           name?: string
           phone?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           verified?: boolean
         }
         Relationships: []
@@ -255,6 +154,152 @@ export type Database = {
           },
         ]
       }
+      request_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_type: string
+          quantity: number
+          request_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_type: string
+          quantity?: number
+          request_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_type?: string
+          quantity?: number
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      requests: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          created_by_admin: boolean
+          description: string | null
+          dropoff_lat: number | null
+          dropoff_lng: number | null
+          dropoff_location: unknown
+          id: string
+          organisation_id: string
+          pickup_lat: number | null
+          pickup_lng: number | null
+          pickup_location: unknown
+          status: string
+          tag: string | null
+          urgency: string
+          volunteer_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by_admin?: boolean
+          description?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_location?: unknown
+          id?: string
+          organisation_id: string
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_location: unknown
+          status?: string
+          tag?: string | null
+          urgency?: string
+          volunteer_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by_admin?: boolean
+          description?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_location?: unknown
+          id?: string
+          organisation_id?: string
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_location?: unknown
+          status?: string
+          tag?: string | null
+          urgency?: string
+          volunteer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requests_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requests_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_stops: {
+        Row: {
+          id: string
+          pickup_id: string | null
+          route_id: string
+          sequence_number: number
+          status: string
+          stop_type: string
+        }
+        Insert: {
+          id?: string
+          pickup_id?: string | null
+          route_id?: string
+          sequence_number: number
+          status: string
+          stop_type?: string
+        }
+        Update: {
+          id?: string
+          pickup_id?: string | null
+          route_id?: string
+          sequence_number?: number
+          status?: string
+          stop_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stops_pickup_id_fkey"
+            columns: ["pickup_id"]
+            isOneToOne: false
+            referencedRelation: "pickups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routes: {
         Row: {
           created_at: string
@@ -310,6 +355,10 @@ export type Database = {
           phone: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          security_answer_1_hash: string | null
+          security_answer_2_hash: string | null
+          security_question_1: string | null
+          security_question_2: string | null
           status: string
         }
         Insert: {
@@ -322,6 +371,10 @@ export type Database = {
           phone?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           status?: string
         }
         Update: {
@@ -334,6 +387,10 @@ export type Database = {
           phone?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           status?: string
         }
         Relationships: [
@@ -422,9 +479,14 @@ export type Database = {
           completed_trips_count: number
           created_at: string
           email: string
-          full_name: string | null
+          full_name: string
           id: string
-          phone: string | null
+          phone: string
+          preferred_package_size: string
+          security_answer_one: string | null
+          security_answer_two: string | null
+          security_question_one: string | null
+          secutriy_question_two: string | null
           service_area: unknown
           status: string
           vehicle_type: string | null
@@ -434,9 +496,14 @@ export type Database = {
           completed_trips_count?: number
           created_at?: string
           email: string
-          full_name?: string | null
+          full_name: string
           id: string
-          phone?: string | null
+          phone: string
+          preferred_package_size?: string
+          security_answer_one?: string | null
+          security_answer_two?: string | null
+          security_question_one?: string | null
+          secutriy_question_two?: string | null
           service_area?: unknown
           status?: string
           vehicle_type?: string | null
@@ -446,9 +513,14 @@ export type Database = {
           completed_trips_count?: number
           created_at?: string
           email?: string
-          full_name?: string | null
+          full_name?: string
           id?: string
-          phone?: string | null
+          phone?: string
+          preferred_package_size?: string
+          security_answer_one?: string | null
+          security_answer_two?: string | null
+          security_question_one?: string | null
+          secutriy_question_two?: string | null
           service_area?: unknown
           status?: string
           vehicle_type?: string | null
@@ -589,9 +661,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
