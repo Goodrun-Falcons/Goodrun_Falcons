@@ -1,5 +1,6 @@
 import "dotenv/config";
 import Fastify from "fastify";
+import type { FastifyInstance } from "fastify";
 import { createClient } from "@supabase/supabase-js";
 
 const app = Fastify({ logger: true });
@@ -12,8 +13,8 @@ const supabase = createClient(
   );
 
 
-export async function getAuthenticatedUser(
-  authorization?: string
+export default async function adminVolunteerAPI(
+  app: FastifyInstance
 ) {    
     // GET Pending
     // admin request all pending vetting volunteers

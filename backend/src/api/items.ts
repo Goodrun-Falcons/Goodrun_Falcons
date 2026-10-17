@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { createClient } from "@supabase/supabase-js";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import multipart from "@fastify/multipart"
 
 const app = Fastify({ logger: true });
 
@@ -235,14 +236,16 @@ export default async function itemAPI(app: FastifyInstance) {
   
   
       // delete pickup row
-      const { pickup_id } = await supabaseUser
+      const { 
+        data: pickupId, 
+        error: pickupError} = await supabaseUser
         .from("pickups")
         .delete()
         .eq("item_id", id)
         .eq("volunteer_id", user.id)
         .maybeSingle();
   
-      if (!pickup_id) {
+      if (!pickupId) {
         request.log.error(pickupError);
   
         return reply
@@ -379,11 +382,7 @@ export default async function itemAPI(app: FastifyInstance) {
 
         // return results
         return reply.status(200).send({
-          items: results,
-          nextCursor:
-            results.length > 0
-              ? results[results.length - 1].accepted_at
-              : after,
+          items: results
         });
       } catch (error) {
         request.log.error(error);
