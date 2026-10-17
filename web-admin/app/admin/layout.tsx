@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
 function BellIcon() {
@@ -29,7 +34,47 @@ function SettingsIcon() {
   );
 }
 
-export default function AdminLayout({ children }: LayoutProps<"/admin">) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAdmin() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: admin } = await supabase
+        .from("admins")
+        .select("id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!admin) {
+        router.replace("/login");
+        return;
+      }
+
+      if (!cancelled) setReady(true);
+    }
+
+    checkAdmin();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (!ready) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#FBF8FF]" />;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#FBF8FF]">
       {/* ── Sidebar ── */}

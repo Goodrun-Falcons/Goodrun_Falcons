@@ -1,85 +1,94 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+import { TAG_OPTIONS, tagLabel, type Tag } from "@/lib/tags";
+import { geocodeAddress } from "@/lib/geocode";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── DB types ─────────────────────────────────────────────────────────────────
 
-type ActiveStatus = "in-transit" | "delayed" | "pending pickup";
-type Status = ActiveStatus | "unassigned" | "completed";
+type DbStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "accepted"
+  | "in_transit"
+  | "delivered";
 
-interface ActiveDelivery {
-  id: string;
-  status: ActiveStatus;
-  title: string;
-  description?: string;
-  estArrival: string;
-  arrivalUrgent?: boolean;
-  driver: string;
-  driverInitials: string;
+type Urgency = "low" | "medium" | "high";
+
+interface RequestItem {
+  item_type: string;
+  quantity: number;
 }
 
-interface PendingDelivery {
-  id: string;
-  title: string;
-  description?: string;
-  requestedTime: string;
-  date: string;
-  time: string;
-  urgent?: boolean;
+interface PickupVolunteer {
+  full_name: string | null;
 }
 
-// ─── Static data ──────────────────────────────────────────────────────────────
+interface Pickup {
+  volunteers: PickupVolunteer | null;
+}
 
-const INITIAL_ACTIVE: ActiveDelivery[] = [
-  {
-    id: "#MP-1024",
-    status: "in-transit",
-    title: "Emergency Medical Supplies - St Vincents",
-    estArrival: "Oct 12 • 14:30",
-    driver: "J. Smith",
-    driverInitials: "JS",
-  },
-  {
-    id: "#MP-1025",
-    status: "pending pickup",
-    title: "Surgical Kits - Royal Melbourne",
-    estArrival: "Oct 12 • 15:15",
-    driver: "A. Chen",
-    driverInitials: "AC",
-  },
-  {
-    id: "#MP-1027",
-    status: "delayed",
-    title: "O Negative Blood Units - Mercy Hospital",
-    estArrival: "Oct 12 • 13:00",
-    arrivalUrgent: true,
-    driver: "M. Davis",
-    driverInitials: "MD",
-  },
-];
+interface Request {
+  id: string;
+  status: DbStatus;
+  tag: Tag | null;
+  description: string | null;
+  urgency: Urgency;
+  created_at: string;
+  created_by_admin: boolean;
+  organisations: { name: string } | null;
+  request_items: RequestItem[];
+  pickups: Pickup[];
+}
 
-const INITIAL_PENDING: PendingDelivery[] = [
-  {
-    id: "#MP-1030",
-    title: "PPE Restock - Northside Clinic",
-    requestedTime: "Oct 12 • 16:00",
-    date: "2026-10-12",
-    time: "16:00",
-  },
-  {
-    id: "#MP-1031",
-    title: "Ventilator Parts - General Hosp.",
-    requestedTime: "Oct 13 • 09:00",
-    date: "2026-10-13",
-    time: "09:00",
-  },
-];
+interface OrgOption {
+  id: string;
+  name: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }) +
+    " • " +
+    d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false })
+  );
+}
+
+function shortId(uuid: string): string {
+  return `#${uuid.slice(0, 8).toUpperCase()}`;
+}
+
+function requestTitle(req: Request): string {
+  const items = req.request_items.map((i) => i.item_type).join(", ");
+  const org = req.organisations?.name ?? "Unknown Org";
+  return items ? `${items} — ${org}` : org;
+}
+
+function nameInitials(name: string | null): string {
+  if (!name) return "?";
+  return name
+    .split(/[\s.]+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function driverForRequest(req: Request): string | null {
+  return req.pickups?.[0]?.volunteers?.full_name ?? null;
+}
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 function PlusIcon() {
   return (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
       <path d="M5.5 1v9M1 5.5h9" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
@@ -87,20 +96,21 @@ function PlusIcon() {
 
 function SearchIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
       <circle cx="6" cy="6" r="5" stroke="#5C403B" strokeWidth="1.3" />
       <path d="M10 10l3 3" stroke="#5C403B" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
 
-function ChevronIcon({ open }: { open: boolean }) {
+function ChevronIcon({ open }: Readonly<{ open: boolean }>) {
   return (
     <svg
       width="12"
       height="8"
       viewBox="0 0 12 8"
       fill="none"
+      aria-hidden="true"
       className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
     >
       <path
@@ -116,7 +126,7 @@ function ChevronIcon({ open }: { open: boolean }) {
 
 function CloseIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
       <path
         d="M1 1l12 12M13 1L1 13"
         stroke="currentColor"
@@ -129,32 +139,38 @@ function CloseIcon() {
 
 // ─── Badges ───────────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<Status, { dot: string; bg: string; text: string; label: string }> = {
-  "in-transit": {
-    dot: "bg-[#11183C]",
-    bg: "bg-[rgba(17,24,60,0.1)]",
-    text: "text-[#11183C]",
-    label: "In Transit",
-  },
-  delayed: {
+const STATUS_CONFIG: Record<DbStatus, { dot: string; bg: string; text: string; label: string }> = {
+  pending: {
     dot: "bg-[#B9100B]",
     bg: "bg-[rgba(185,16,11,0.1)]",
     text: "text-[#B9100B]",
-    label: "Delayed",
+    label: "Pending Review",
   },
-  "pending pickup": {
-    dot: "bg-[#B9100B]",
-    bg: "bg-[rgba(185,16,11,0.1)]",
-    text: "text-[#B9100B]",
-    label: "Pending Pickup",
-  },
-  unassigned: {
+  approved: {
     dot: "bg-[#B9100B]",
     bg: "bg-[rgba(185,16,11,0.1)]",
     text: "text-[#B9100B]",
     label: "Unassigned",
   },
-  completed: {
+  rejected: {
+    dot: "bg-[#B9100B]",
+    bg: "bg-[rgba(185,16,11,0.1)]",
+    text: "text-[#B9100B]",
+    label: "Rejected",
+  },
+  accepted: {
+    dot: "bg-[#11183C]",
+    bg: "bg-[rgba(17,24,60,0.1)]",
+    text: "text-[#11183C]",
+    label: "Accepted",
+  },
+  in_transit: {
+    dot: "bg-[#11183C]",
+    bg: "bg-[rgba(17,24,60,0.1)]",
+    text: "text-[#11183C]",
+    label: "In Transit",
+  },
+  delivered: {
     dot: "bg-[#2E7D32]",
     bg: "bg-[rgba(46,125,50,0.1)]",
     text: "text-[#2E7D32]",
@@ -162,7 +178,7 @@ const STATUS_CONFIG: Record<Status, { dot: string; bg: string; text: string; lab
   },
 };
 
-function StatusBadge({ status }: { status: Status }) {
+function StatusBadge({ status }: Readonly<{ status: DbStatus }>) {
   const c = STATUS_CONFIG[status];
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-sm px-2 py-1 ${c.bg}`}>
@@ -176,14 +192,21 @@ function UrgentBadge() {
   return (
     <span className="inline-flex w-fit items-center gap-1 rounded-sm bg-[rgba(185,16,11,0.1)] px-1.5 py-0.5">
       <span className="size-1.5 rounded-full bg-[#B9100B]" />
-      <span className="text-[10px] font-bold uppercase tracking-[0.05em] text-[#B9100B]">
-        Urgent
-      </span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.05em] text-[#B9100B]">Urgent</span>
     </span>
   );
 }
 
-function CountBadge({ count, bg, textColor }: { count: number; bg: string; textColor: string }) {
+function TagBadge({ tag }: Readonly<{ tag: Tag }>) {
+  const label = tagLabel(tag);
+  return (
+    <span className="inline-flex rounded-sm bg-[rgba(17,24,60,0.07)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.03em] text-[#11183C]">
+      {label}
+    </span>
+  );
+}
+
+function CountBadge({ count, bg, textColor }: Readonly<{ count: number; bg: string; textColor: string }>) {
   return (
     <span className={`rounded-sm px-2 py-0.5 text-[12px] font-bold ${bg} ${textColor}`}>
       {count}
@@ -202,7 +225,7 @@ function AccordionSection({
   open,
   onToggle,
   children,
-}: {
+}: Readonly<{
   title: string;
   dotColor: string;
   countBg: string;
@@ -211,7 +234,7 @@ function AccordionSection({
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <div className="overflow-hidden rounded" style={{ border: "1px solid #E5BDB7" }}>
       <button
@@ -234,175 +257,150 @@ function AccordionSection({
 
 // ─── Table Headers ────────────────────────────────────────────────────────────
 
+const TH = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
+const THEAD_BASE = "grid gap-4 px-3 py-3";
+const THEAD_STYLE = { background: "#F8F9FA", borderBottom: "1px solid #E5BDB7" };
+
 function ActiveTableHeader() {
   return (
-    <div
-      className="grid grid-cols-12 gap-4 px-3 py-3"
-      style={{ background: "#F8F9FA", borderBottom: "1px solid #E5BDB7" }}
-    >
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Delivery ID
-      </div>
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Status
-      </div>
-      <div className="col-span-4 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Title / Destination
-      </div>
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Est. Arrival
-      </div>
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Driver
-      </div>
+    <div className={`${THEAD_BASE} grid-cols-12`} style={THEAD_STYLE}>
+      <div className={`col-span-2 ${TH}`}>Delivery ID</div>
+      <div className={`col-span-2 ${TH}`}>Status</div>
+      <div className={`col-span-4 ${TH}`}>Title / Destination</div>
+      <div className={`col-span-2 ${TH}`}>Created</div>
+      <div className={`col-span-2 ${TH}`}>Driver</div>
     </div>
   );
 }
 
-function PendingTableHeader() {
+function ApprovedTableHeader() {
   return (
-    <div
-      className="grid grid-cols-12 gap-4 px-3 py-3"
-      style={{ background: "#F8F9FA", borderBottom: "1px solid #E5BDB7" }}
-    >
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Delivery ID
-      </div>
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Status
-      </div>
-      <div className="col-span-4 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Title / Destination
-      </div>
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Requested Time
-      </div>
-      <div className="col-span-2 text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-        Action
-      </div>
+    <div className={`${THEAD_BASE} grid-cols-12`} style={THEAD_STYLE}>
+      <div className={`col-span-2 ${TH}`}>Delivery ID</div>
+      <div className={`col-span-2 ${TH}`}>Status</div>
+      <div className={`col-span-4 ${TH}`}>Title / Destination</div>
+      <div className={`col-span-2 ${TH}`}>Requested</div>
+      <div className={`col-span-2 ${TH}`}>Action</div>
+    </div>
+  );
+}
+
+function PendingReviewTableHeader() {
+  return (
+    <div className={`${THEAD_BASE} grid-cols-12`} style={THEAD_STYLE}>
+      <div className={`col-span-2 ${TH}`}>Delivery ID</div>
+      <div className={`col-span-2 ${TH}`}>Status</div>
+      <div className={`col-span-3 ${TH}`}>Title / Destination</div>
+      <div className={`col-span-1 ${TH}`}>Tag</div>
+      <div className={`col-span-2 ${TH}`}>Submitted</div>
+      <div className={`col-span-2 ${TH}`}>Actions</div>
     </div>
   );
 }
 
 // ─── Row Components ───────────────────────────────────────────────────────────
 
+const ROW_BASE = "grid grid-cols-12 items-center gap-4 px-3 py-3 bg-white";
+
 function ActiveRow({
-  delivery,
+  req,
   isFirst,
   onClick,
-}: {
-  delivery: ActiveDelivery;
+}: Readonly<{
+  req: Request;
   isFirst: boolean;
   onClick: () => void;
-}) {
-  const isDelayed = delivery.status === "delayed";
+}>) {
+  const driver = driverForRequest(req);
+  const driverInits = driver ? nameInitials(driver) : "?";
+  const isUrgent = req.urgency === "high";
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full grid-cols-12 cursor-pointer items-center gap-4 px-3 py-3 text-left transition-colors hover:bg-[rgba(17,24,60,0.03)]"
-      style={{
-        background: "#FFFFFF",
-        borderTop: isFirst ? undefined : "1px solid #E5BDB7",
-        borderLeft: isDelayed ? "2px solid #B9100B" : undefined,
-      }}
+      className={`${ROW_BASE} w-full cursor-pointer text-left transition-colors hover:bg-[rgba(17,24,60,0.03)]`}
+      style={{ borderTop: isFirst ? undefined : "1px solid #E5BDB7" }}
     >
       {/* ID */}
       <div className="col-span-2 text-[12px] font-bold leading-4 text-[#1B1B22]">
-        {delivery.id}
+        {shortId(req.id)}
       </div>
-
       {/* Status */}
       <div className="col-span-2 flex flex-col gap-1">
-        <StatusBadge status={delivery.status} />
-        {delivery.arrivalUrgent && <UrgentBadge />}
+        <StatusBadge status={req.status} />
+        {isUrgent && <UrgentBadge />}
       </div>
-
-      {/* Title */}
-      <div
-        className={`col-span-4 text-[13px] leading-[18px] ${
-          isDelayed ? "font-semibold text-[#1B1B22]" : "font-normal text-[#1B1B22]"
-        }`}
-      >
-        {delivery.title}
+      {/* Title + Tag */}
+      <div className="col-span-4 flex flex-col gap-0.5 overflow-hidden">
+        <span className="truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
+        {req.tag && <TagBadge tag={req.tag} />}
       </div>
-
-      {/* Arrival */}
-      <div
-        className={`col-span-2 text-[13px] leading-[18px] ${
-          delivery.arrivalUrgent
-            ? "font-semibold text-[#BA1A1A]"
-            : "font-normal text-[#5C403B]"
-        }`}
-      >
-        {delivery.estArrival}
+      {/* Created */}
+      <div className="col-span-2 text-[13px] leading-[18px] text-[#5C403B]">
+        {formatDate(req.created_at)}
       </div>
-
       {/* Driver */}
       <div className="col-span-2 flex items-center gap-2">
         <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#E5BDB7] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183C]">
-          {delivery.driverInitials}
+          {driverInits}
         </div>
-        <span className="text-[12px] font-medium leading-4 text-[#1B1B22]">
-          {delivery.driver}
+        <span className="truncate text-[12px] font-medium leading-4 text-[#1B1B22]">
+          {driver ?? "Unassigned"}
         </span>
       </div>
     </button>
   );
 }
 
-function PendingRow({
-  delivery,
+function ApprovedRow({
+  req,
   isFirst,
   onClick,
-}: {
-  delivery: PendingDelivery;
+}: Readonly<{
+  req: Request;
   isFirst: boolean;
   onClick: () => void;
-}) {
+}>) {
+  const isUrgent = req.urgency === "high";
+
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
-      className="grid w-full grid-cols-12 cursor-pointer items-center gap-4 px-3 py-3 text-left transition-colors hover:bg-[rgba(185,16,11,0.02)]"
+      className={`${ROW_BASE} relative`}
       style={{
-        background: "#FFFFFF",
         borderTop: isFirst ? undefined : "1px solid #E5BDB7",
-        borderLeft: delivery.urgent ? "2px solid #B9100B" : undefined,
+        borderLeft: isUrgent ? "2px solid #B9100B" : undefined,
       }}
     >
+      {/* Full-row click overlay — semantic button behind the content */}
+      <button
+        type="button"
+        className="absolute inset-0 cursor-pointer transition-colors hover:bg-[rgba(185,16,11,0.02)]"
+        aria-label={`View delivery details for ${shortId(req.id)}`}
+        onClick={onClick}
+      />
       {/* ID */}
-      <div className="col-span-2 text-[12px] font-bold leading-4 text-[#1B1B22]">
-        {delivery.id}
+      <div className="relative z-10 col-span-2 text-[12px] font-bold leading-4 text-[#1B1B22]">
+        {shortId(req.id)}
       </div>
-
-      {/* Status + Urgent badge stacked */}
-      <div className="col-span-2 flex flex-col gap-1">
-        <StatusBadge status="unassigned" />
-        {delivery.urgent && <UrgentBadge />}
+      {/* Status */}
+      <div className="relative z-10 col-span-2 flex flex-col gap-1">
+        <StatusBadge status={req.status} />
+        {isUrgent && <UrgentBadge />}
       </div>
-
-      {/* Title */}
-      <div
-        className={`col-span-4 text-[13px] leading-[18px] ${
-          delivery.urgent ? "font-semibold text-[#1B1B22]" : "font-normal text-[#1B1B22]"
-        }`}
-      >
-        {delivery.title}
+      {/* Title + Tag */}
+      <div className="relative z-10 col-span-4 flex flex-col gap-0.5 overflow-hidden">
+        <span className="truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
+        {req.tag && <TagBadge tag={req.tag} />}
       </div>
-
-      {/* Requested time */}
-      <div className="col-span-2 text-[13px] font-normal leading-[18px] text-[#5C403B]">
-        {delivery.requestedTime}
+      {/* Requested */}
+      <div className="relative z-10 col-span-2 text-[13px] leading-[18px] text-[#5C403B]">
+        {formatDate(req.created_at)}
       </div>
-
-      {/* Action — stop propagation so clicking "Assign Driver" doesn't open the detail modal */}
-      <div className="col-span-2 flex items-center">
+      {/* Action — z-10 sits above the overlay button */}
+      <div className="relative z-10 col-span-2 flex items-center">
         <button
           type="button"
-          onClick={(e) => e.stopPropagation()}
           className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#8F0002] transition-opacity hover:opacity-70"
         >
           Assign Driver
@@ -412,40 +410,91 @@ function PendingRow({
   );
 }
 
-// ─── Delivery Detail / Edit Modal ─────────────────────────────────────────────
+function PendingReviewRow({
+  req,
+  isFirst,
+  onClick,
+  onApprove,
+  onReject,
+}: Readonly<{
+  req: Request;
+  isFirst: boolean;
+  onClick: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+}>) {
+  const isUrgent = req.urgency === "high";
 
-type SelectedDelivery =
-  | { kind: "active"; data: ActiveDelivery }
-  | { kind: "pending"; data: PendingDelivery };
-
-interface ActiveDetailForm {
-  title: string;
-  description: string;
-  status: ActiveStatus;
-  estArrival: string;
-  driver: string;
-  arrivalUrgent: boolean;
+  return (
+    <div
+      className={`${ROW_BASE} relative`}
+      style={{
+        borderTop: isFirst ? undefined : "1px solid #E5BDB7",
+        borderLeft: isUrgent ? "2px solid #B9100B" : undefined,
+      }}
+    >
+      {/* Full-row click overlay — semantic button behind the content */}
+      <button
+        type="button"
+        className="absolute inset-0 cursor-pointer transition-colors hover:bg-[rgba(185,16,11,0.02)]"
+        aria-label={`View delivery details for ${shortId(req.id)}`}
+        onClick={onClick}
+      />
+      {/* ID */}
+      <div className="relative z-10 col-span-2 text-[12px] font-bold leading-4 text-[#1B1B22]">
+        {shortId(req.id)}
+      </div>
+      {/* Status */}
+      <div className="relative z-10 col-span-2 flex flex-col gap-1">
+        <StatusBadge status={req.status} />
+        {isUrgent && <UrgentBadge />}
+      </div>
+      {/* Title */}
+      <div className="relative z-10 col-span-3 overflow-hidden">
+        <span className="block truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
+      </div>
+      {/* Tag */}
+      <div className="relative z-10 col-span-1">
+        {req.tag ? <TagBadge tag={req.tag} /> : <span className="text-[11px] text-[#9CA3AF]">—</span>}
+      </div>
+      {/* Submitted */}
+      <div className="relative z-10 col-span-2 text-[13px] leading-[18px] text-[#5C403B]">
+        {formatDate(req.created_at)}
+      </div>
+      {/* Actions — z-10 sits above the overlay button */}
+      <div className="relative z-10 col-span-2 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onApprove}
+          className="flex h-7 items-center rounded-[2px] bg-[#2E7D32] px-2.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-80"
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          onClick={onReject}
+          className="flex h-7 items-center rounded-[2px] bg-[#B9100B] px-2.5 text-[11px] font-semibold text-white transition-opacity hover:opacity-80"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
 }
 
-interface PendingDetailForm {
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  urgent: boolean;
-}
+// ─── Urgent Toggle (shared by both modals) ────────────────────────────────────
 
 function UrgentToggle({
   checked,
   label,
   subLabel,
   onChange,
-}: {
+}: Readonly<{
   checked: boolean;
   label: string;
   subLabel: string;
   onChange: () => void;
-}) {
+}>) {
   return (
     <div
       className="flex items-center justify-between rounded-lg px-4 py-3"
@@ -479,128 +528,68 @@ function UrgentToggle({
   );
 }
 
+// ─── Delivery Detail Modal ─────────────────────────────────────────────────────
+
 function DeliveryDetailModal({
-  selected,
+  req,
   onClose,
-  onSave,
-  onDelete,
-}: {
-  selected: SelectedDelivery;
+  onApprove,
+  onReject,
+  onTagChange,
+}: Readonly<{
+  req: Request;
   onClose: () => void;
-  onSave: (updated: SelectedDelivery) => void;
-  onDelete: (id: string) => void;
-}) {
-  const today = new Date().toISOString().split("T")[0];
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  onApprove: (id: string) => Promise<void>;
+  onReject: (id: string) => Promise<void>;
+  onTagChange: (id: string, tag: Tag | null) => Promise<void>;
+}>) {
+  const [localTag, setLocalTag] = useState<Tag | null>(req.tag);
+  const [tagDirty, setTagDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [activeForm, setActiveForm] = useState<ActiveDetailForm>(
-    selected.kind === "active"
-      ? {
-          title: selected.data.title,
-          description: selected.data.description ?? "",
-          status: selected.data.status,
-          estArrival: selected.data.estArrival,
-          driver: selected.data.driver,
-          arrivalUrgent: selected.data.arrivalUrgent ?? false,
-        }
-      : {
-          title: "",
-          description: "",
-          status: "in-transit",
-          estArrival: "",
-          driver: "",
-          arrivalUrgent: false,
-        }
-  );
-
-  const [pendingForm, setPendingForm] = useState<PendingDetailForm>(
-    selected.kind === "pending"
-      ? {
-          title: selected.data.title,
-          description: selected.data.description ?? "",
-          date: selected.data.date,
-          time: selected.data.time,
-          urgent: selected.data.urgent ?? false,
-        }
-      : { title: "", description: "", date: "", time: "", urgent: false }
-  );
-
-  function handleSave(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (selected.kind === "active") {
-      onSave({
-        kind: "active",
-        data: {
-          ...selected.data,
-          title: activeForm.title,
-          description: activeForm.description,
-          status: activeForm.status,
-          estArrival: activeForm.estArrival,
-          driver: activeForm.driver,
-          driverInitials: activeForm.driver
-            .split(/[\s.]+/)
-            .filter(Boolean)
-            .map((p) => p[0])
-            .join("")
-            .toUpperCase()
-            .slice(0, 2),
-          arrivalUrgent: activeForm.arrivalUrgent,
-        },
-      });
-    } else {
-      const datePart = pendingForm.date
-        ? new Date(pendingForm.date).toLocaleDateString("en-AU", {
-            day: "2-digit",
-            month: "short",
-          })
-        : "";
-      const requestedTime =
-        datePart && pendingForm.time
-          ? `${datePart} • ${pendingForm.time}`
-          : datePart || pendingForm.time;
-      onSave({
-        kind: "pending",
-        data: {
-          ...selected.data,
-          title: pendingForm.title,
-          description: pendingForm.description,
-          date: pendingForm.date,
-          time: pendingForm.time,
-          requestedTime,
-          urgent: pendingForm.urgent,
-        },
-      });
-    }
-    onClose();
-  }
-
-  function handleDelete() {
-    onDelete(selected.data.id);
-    onClose();
-  }
-
-  const inputClass =
-    "h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#11183C]";
-  const inputStyle: React.CSSProperties = { background: "#FBF8FF", border: "1px solid #E5BDB7" };
+  const driver = driverForRequest(req);
+  const isPending = req.status === "pending";
+  const canEditTag = req.status === "pending" || req.status === "approved";
   const labelClass = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
-  const statusOptions: { value: ActiveStatus; label: string }[] = [
-    { value: "in-transit", label: "In Transit" },
-    { value: "delayed", label: "Delayed" },
-    { value: "pending pickup", label: "Pending Pickup" },
-  ];
+  const inputStyle: React.CSSProperties = { background: "#FBF8FF", border: "1px solid #E5BDB7" };
+
+  async function handleApprove() {
+    setSaving(true);
+    await onApprove(req.id);
+    setSaving(false);
+    onClose();
+  }
+
+  async function handleReject() {
+    setSaving(true);
+    await onReject(req.id);
+    setSaving(false);
+    onClose();
+  }
+
+  async function handleSaveTag() {
+    setSaving(true);
+    await onTagChange(req.id, localTag);
+    setTagDirty(false);
+    setSaving(false);
+    onClose();
+  }
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
     >
+      {/* Backdrop — close on click */}
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Close modal"
+        onClick={onClose}
+      />
       <div
-        className="relative flex max-h-[90vh] w-[520px] flex-col rounded-2xl bg-white shadow-xl"
+        className="relative z-10 flex max-h-[90vh] w-[520px] flex-col rounded-2xl bg-white shadow-xl"
         style={{ border: "1px solid #E5BDB7" }}
       >
         {/* Header */}
@@ -610,16 +599,12 @@ function DeliveryDetailModal({
         >
           <div className="flex flex-col gap-1.5">
             <span className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
-              {selected.data.id}
+              {shortId(req.id)}
             </span>
-            <h2 className="text-[18px] font-semibold leading-6 text-[#1B1B22]">
-              Delivery Details
-            </h2>
+            <h2 className="text-[18px] font-semibold leading-6 text-[#1B1B22]">Delivery Details</h2>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-              <StatusBadge
-                status={selected.kind === "active" ? selected.data.status : "unassigned"}
-              />
-              {selected.kind === "pending" && selected.data.urgent && <UrgentBadge />}
+              <StatusBadge status={req.status} />
+              {req.urgency === "high" && <UrgentBadge />}
             </div>
           </div>
           <button
@@ -632,233 +617,126 @@ function DeliveryDetailModal({
           </button>
         </div>
 
-        {/* Scrollable form body */}
-        <form
-          onSubmit={handleSave}
-          className="flex flex-col gap-5 overflow-y-auto px-6 py-6"
-        >
-          {/* Title */}
+        {/* Scrollable body */}
+        <div className="flex flex-col gap-5 overflow-y-auto px-6 py-6">
+          {/* Org */}
+          <div className="flex flex-col gap-1">
+            <span className={labelClass}>Organisation</span>
+            <span className="text-[14px] text-[#1B1B22]">{req.organisations?.name ?? "—"}</span>
+          </div>
+
+          {/* Items */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="detail-title" className={labelClass}>
-              Delivery Title
-            </label>
-            <input
-              id="detail-title"
-              type="text"
-              required
-              value={selected.kind === "active" ? activeForm.title : pendingForm.title}
-              onChange={(e) =>
-                selected.kind === "active"
-                  ? setActiveForm((f) => ({ ...f, title: e.target.value }))
-                  : setPendingForm((f) => ({ ...f, title: e.target.value }))
-              }
-              className={inputClass}
-              style={inputStyle}
-            />
+            <span className={labelClass}>Items Requested</span>
+            {req.request_items.length > 0 ? (
+              <ul className="flex flex-col gap-1">
+                {req.request_items.map((item, i) => (
+                  <li
+                    key={`${item.item_type}-${i}`}
+                    className="flex items-center justify-between rounded-lg px-3 py-2"
+                    style={{ background: "#F5F2FC", border: "1px solid #E5BDB7" }}
+                  >
+                    <span className="text-[13px] text-[#1B1B22]">{item.item_type}</span>
+                    <span className="text-[12px] font-semibold text-[#5C403B]">×{item.quantity}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-[13px] text-[#9CA3AF]">No items recorded.</span>
+            )}
           </div>
 
           {/* Description */}
+          {req.description && (
+            <div className="flex flex-col gap-1">
+              <span className={labelClass}>Description</span>
+              <p className="text-[13px] leading-relaxed text-[#1B1B22]">{req.description}</p>
+            </div>
+          )}
+
+          {/* Driver (active deliveries) */}
+          {(req.status === "accepted" || req.status === "in_transit") && (
+            <div className="flex flex-col gap-1">
+              <span className={labelClass}>Assigned Driver</span>
+              <div className="flex items-center gap-2">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-[#E5BDB7] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183C]">
+                  {nameInitials(driver)}
+                </div>
+                <span className="text-[13px] text-[#1B1B22]">{driver ?? "Unassigned"}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Tag */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="detail-description" className={labelClass}>
-              Item Descriptions
-            </label>
-            <textarea
-              id="detail-description"
-              rows={3}
-              placeholder="List items included in this delivery…"
-              value={
-                selected.kind === "active" ? activeForm.description : pendingForm.description
-              }
-              onChange={(e) =>
-                selected.kind === "active"
-                  ? setActiveForm((f) => ({ ...f, description: e.target.value }))
-                  : setPendingForm((f) => ({ ...f, description: e.target.value }))
-              }
-              className="w-full resize-none rounded-lg px-3 py-2.5 text-[13px] leading-[1.6] text-[#1B1B22] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
-              style={inputStyle}
-            />
+            <span className={labelClass}>Tag</span>
+            {canEditTag ? (
+              <select
+                value={localTag ?? ""}
+                onChange={(e) => {
+                  setLocalTag((e.target.value as Tag) || null);
+                  setTagDirty(true);
+                }}
+                className="h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
+                style={inputStyle}
+              >
+                <option value="">— No tag —</option>
+                {TAG_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-[13px] text-[#1B1B22]">{req.tag ? tagLabel(req.tag) : "—"}</span>
+            )}
           </div>
 
-          {/* ── Pending-specific ── */}
-          {selected.kind === "pending" && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="detail-date" className={labelClass}>
-                    Delivery Date
-                  </label>
-                  <input
-                    id="detail-date"
-                    type="date"
-                    required
-                    min={today}
-                    value={pendingForm.date}
-                    onChange={(e) =>
-                      setPendingForm((f) => ({ ...f, date: e.target.value }))
-                    }
-                    className={inputClass}
-                    style={inputStyle}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="detail-time" className={labelClass}>
-                    Time
-                  </label>
-                  <input
-                    id="detail-time"
-                    type="time"
-                    required
-                    value={pendingForm.time}
-                    onChange={(e) =>
-                      setPendingForm((f) => ({ ...f, time: e.target.value }))
-                    }
-                    className={inputClass}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-
-              <UrgentToggle
-                checked={pendingForm.urgent}
-                label="Mark as Urgent"
-                subLabel="Flags this delivery for priority handling"
-                onChange={() => setPendingForm((f) => ({ ...f, urgent: !f.urgent }))}
-              />
-            </>
-          )}
-
-          {/* ── Active-specific ── */}
-          {selected.kind === "active" && (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="detail-status" className={labelClass}>
-                  Status
-                </label>
-                <select
-                  id="detail-status"
-                  value={activeForm.status}
-                  onChange={(e) =>
-                    setActiveForm((f) => ({
-                      ...f,
-                      status: e.target.value as ActiveStatus,
-                    }))
-                  }
-                  className={inputClass}
-                  style={inputStyle}
-                >
-                  {statusOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="detail-arrival" className={labelClass}>
-                    Est. Arrival
-                  </label>
-                  <input
-                    id="detail-arrival"
-                    type="text"
-                    placeholder="e.g. Oct 12 • 14:30"
-                    value={activeForm.estArrival}
-                    onChange={(e) =>
-                      setActiveForm((f) => ({ ...f, estArrival: e.target.value }))
-                    }
-                    className={inputClass}
-                    style={inputStyle}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="detail-driver" className={labelClass}>
-                    Driver
-                  </label>
-                  <input
-                    id="detail-driver"
-                    type="text"
-                    placeholder="e.g. J. Smith"
-                    value={activeForm.driver}
-                    onChange={(e) =>
-                      setActiveForm((f) => ({ ...f, driver: e.target.value }))
-                    }
-                    className={inputClass}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-
-              <UrgentToggle
-                checked={activeForm.arrivalUrgent}
-                label="Mark Arrival as Urgent"
-                subLabel="Highlights the arrival time in red on the list"
-                onChange={() =>
-                  setActiveForm((f) => ({ ...f, arrivalUrgent: !f.arrivalUrgent }))
-                }
-              />
-            </>
-          )}
-
           {/* Footer */}
-          {confirmDelete ? (
-            <div
-              className="flex flex-col gap-3 rounded-lg px-4 py-4"
-              style={{ background: "rgba(185,16,11,0.06)", border: "1px solid #B9100B" }}
+          <div
+            className="flex items-center justify-end gap-3"
+            style={{ borderTop: "1px solid #E5BDB7", paddingTop: "16px" }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] hover:bg-[rgba(185,16,11,0.06)]"
+              style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
             >
-              <p className="text-[13px] font-semibold text-[#B9100B]">
-                Delete this delivery? This cannot be undone.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  className="flex h-9 flex-1 items-center justify-center rounded-lg text-[13px] font-medium text-[#5C403B] transition-colors hover:bg-[rgba(185,16,11,0.06)]"
-                  style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="flex h-9 flex-1 items-center justify-center rounded-lg bg-[#B9100B] text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  Confirm Delete
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div
-              className="flex items-center justify-between gap-3"
-              style={{ borderTop: "1px solid #E5BDB7", paddingTop: "16px" }}
-            >
+              Close
+            </button>
+
+            {tagDirty && (
               <button
                 type="button"
-                onClick={() => setConfirmDelete(true)}
-                className="flex h-10 items-center rounded-lg px-4 text-[13px] font-semibold text-[#B9100B] transition-colors hover:bg-[rgba(185,16,11,0.06)]"
-                style={{ border: "1px solid #B9100B" }}
+                onClick={handleSaveTag}
+                disabled={saving}
+                className="flex h-10 items-center rounded-lg bg-[#11183C] px-5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
               >
-                Delete Delivery
+                {saving ? "Saving…" : "Save Tag"}
               </button>
-              <div className="flex gap-3">
+            )}
+
+            {isPending && (
+              <>
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] transition-colors hover:bg-[rgba(185,16,11,0.06)]"
-                  style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+                  onClick={handleReject}
+                  disabled={saving}
+                  className="flex h-10 items-center rounded-lg bg-[#B9100B] px-5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
                 >
-                  Cancel
+                  Reject
                 </button>
                 <button
-                  type="submit"
-                  className="flex h-10 items-center rounded-lg bg-[#B9100B] px-5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                  type="button"
+                  onClick={handleApprove}
+                  disabled={saving}
+                  className="flex h-10 items-center rounded-lg bg-[#2E7D32] px-5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
                 >
-                  Save Changes
+                  Approve
                 </button>
-              </div>
-            </div>
-          )}
-        </form>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -867,48 +745,66 @@ function DeliveryDetailModal({
 // ─── New Delivery Modal ───────────────────────────────────────────────────────
 
 interface NewDeliveryForm {
+  orgId: string;
   title: string;
   description: string;
-  date: string;
-  time: string;
+  pickupAddress: string;
   urgent: boolean;
 }
 
 function NewDeliveryModal({
+  orgs,
   onClose,
   onSubmit,
-}: {
+}: Readonly<{
+  orgs: OrgOption[];
   onClose: () => void;
-  onSubmit: (form: NewDeliveryForm) => void;
-}) {
-  const today = new Date().toISOString().split("T")[0];
-
+  onSubmit: (form: NewDeliveryForm) => Promise<void>;
+}>) {
   const [form, setForm] = useState<NewDeliveryForm>({
+    orgId: orgs[0]?.id ?? "",
     title: "",
     description: "",
-    date: "",
-    time: "",
+    pickupAddress: "",
     urgent: false,
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
-    onSubmit(form);
-    onClose();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onSubmit(form);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
+  const inputClass =
+    "h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#11183C]";
+  const inputStyle: React.CSSProperties = { background: "#FBF8FF", border: "1px solid #E5BDB7" };
+  const labelClass = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
+
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
     >
+      {/* Backdrop — close on click */}
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Close modal"
+        onClick={onClose}
+      />
       <div
-        className="relative w-[480px] rounded-2xl bg-white shadow-xl"
+        className="relative z-10 w-[480px] rounded-2xl bg-white shadow-xl"
         style={{ border: "1px solid #E5BDB7" }}
       >
         {/* Header */}
@@ -920,7 +816,7 @@ function NewDeliveryModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex size-7 items-center justify-center rounded-full text-[#5C403B] transition-colors hover:bg-[rgba(185,16,11,0.08)] hover:text-[#B9100B]"
+            className="flex size-7 items-center justify-center rounded-full text-[#5C403B] hover:bg-[rgba(185,16,11,0.08)] hover:text-[#B9100B]"
             aria-label="Close"
           >
             <CloseIcon />
@@ -928,92 +824,82 @@ function NewDeliveryModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-6">
-          {/* Title */}
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-5 px-6 py-6">
+          {/* Organisation */}
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="delivery-title"
-              className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]"
+            <label htmlFor="new-org" className={labelClass}>Organisation</label>
+            <select
+              id="new-org"
+              required
+              value={form.orgId}
+              onChange={(e) => setForm((f) => ({ ...f, orgId: e.target.value }))}
+              className={inputClass}
+              style={inputStyle}
             >
-              Delivery Title
-            </label>
+              <option value="">Select an organisation…</option>
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Title / Item */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="new-title" className={labelClass}>Delivery Item</label>
             <input
-              id="delivery-title"
+              id="new-title"
               type="text"
               required
-              placeholder="e.g. Emergency Medical Supplies – St Vincents"
+              placeholder="e.g. Emergency Medical Supplies"
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              className="h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
-              style={{ background: "#FBF8FF", border: "1px solid #E5BDB7" }}
+              className={inputClass}
+              style={inputStyle}
             />
           </div>
 
           {/* Description */}
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="delivery-description"
-              className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]"
-            >
-              Item Descriptions
-            </label>
+            <label htmlFor="new-description" className={labelClass}>Description</label>
             <textarea
-              id="delivery-description"
-              rows={4}
-              placeholder="List items included in this delivery…"
+              id="new-description"
+              rows={3}
+              placeholder="Additional notes about this delivery…"
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               className="w-full resize-none rounded-lg px-3 py-2.5 text-[13px] leading-[1.6] text-[#1B1B22] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
-              style={{ background: "#FBF8FF", border: "1px solid #E5BDB7" }}
+              style={inputStyle}
             />
           </div>
 
-          {/* Date & Time */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="delivery-date"
-                className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]"
-              >
-                Delivery Date
-              </label>
-              <input
-                id="delivery-date"
-                type="date"
-                required
-                min={today}
-                value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                className="h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
-                style={{ background: "#FBF8FF", border: "1px solid #E5BDB7" }}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="delivery-time"
-                className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]"
-              >
-                Time
-              </label>
-              <input
-                id="delivery-time"
-                type="time"
-                required
-                value={form.time}
-                onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                className="h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
-                style={{ background: "#FBF8FF", border: "1px solid #E5BDB7" }}
-              />
-            </div>
+          {/* Pickup address */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="new-address" className={labelClass}>Pickup Address</label>
+            <input
+              id="new-address"
+              type="text"
+              required
+              placeholder="e.g. 123 George St, Sydney NSW 2000"
+              value={form.pickupAddress}
+              onChange={(e) => setForm((f) => ({ ...f, pickupAddress: e.target.value }))}
+              className={inputClass}
+              style={inputStyle}
+            />
           </div>
 
           {/* Urgent */}
           <UrgentToggle
             checked={form.urgent}
             label="Mark as Urgent"
-            subLabel="Flags this delivery for priority handling"
+            subLabel="Sets urgency to High — flags this delivery for priority handling"
             onChange={() => setForm((f) => ({ ...f, urgent: !f.urgent }))}
           />
+
+          {error && (
+            <p className="rounded-lg bg-[rgba(185,16,11,0.08)] px-4 py-3 text-[13px] text-[#B9100B]">
+              {error}
+            </p>
+          )}
 
           {/* Footer */}
           <div
@@ -1023,17 +909,18 @@ function NewDeliveryModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] transition-colors hover:bg-[rgba(185,16,11,0.06)]"
+              className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] hover:bg-[rgba(185,16,11,0.06)]"
               style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex h-10 items-center gap-2 rounded-lg bg-[#B9100B] px-5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+              disabled={submitting}
+              className="flex h-10 items-center gap-2 rounded-lg bg-[#B9100B] px-5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
               <PlusIcon />
-              Create Delivery
+              {submitting ? "Creating…" : "Create Delivery"}
             </button>
           </div>
         </form>
@@ -1042,56 +929,145 @@ function NewDeliveryModal({
   );
 }
 
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState({ label }: Readonly<{ label: string }>) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-10 text-center">
+      <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+        <circle cx="18" cy="18" r="17" stroke="#e5bdb7" strokeWidth="1.4" />
+        <path d="M18 12v6M18 21v2" stroke="#b9100b" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      <p className="text-[13px] font-medium text-[#5C403B]">{label}</p>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DeliveriesPage() {
-  const [activeOpen, setActiveOpen] = useState(true);
-  const [pendingOpen, setPendingOpen] = useState(true);
-  const [completedOpen, setCompletedOpen] = useState(false);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [orgs, setOrgs] = useState<OrgOption[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
-  const [activeDeliveries, setActiveDeliveries] = useState<ActiveDelivery[]>(INITIAL_ACTIVE);
-  const [pendingDeliveries, setPendingDeliveries] = useState<PendingDelivery[]>(INITIAL_PENDING);
-  const [selectedDelivery, setSelectedDelivery] = useState<SelectedDelivery | null>(null);
-  const nextId = useRef(1032);
+  const [selectedReq, setSelectedReq] = useState<Request | null>(null);
 
-  function handleCreateDelivery(form: NewDeliveryForm) {
-    const id = `#MP-${nextId.current++}`;
-    const datePart = form.date
-      ? new Date(form.date).toLocaleDateString("en-AU", { day: "2-digit", month: "short" })
-      : "";
-    const requestedTime =
-      datePart && form.time ? `${datePart} • ${form.time}` : datePart || form.time;
-    setPendingDeliveries((prev) => [
-      {
-        id,
-        title: form.title,
-        description: form.description,
-        requestedTime,
-        date: form.date,
-        time: form.time,
-        urgent: form.urgent,
-      },
-      ...prev,
+  const [pendingOpen, setPendingOpen] = useState(true);
+  const [approvedOpen, setApprovedOpen] = useState(true);
+  const [activeOpen, setActiveOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    const [{ data: reqData }, { data: orgData }] = await Promise.all([
+      supabase
+        .from("requests")
+        .select(
+          `id, status, tag, description, urgency, created_at, created_by_admin,
+           organisations(name),
+           request_items(item_type, quantity),
+           pickups(volunteers(full_name))`
+        )
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("organisations")
+        .select("id, name")
+        .eq("active", true)
+        .order("name"),
     ]);
-    setPendingOpen(true);
+
+    if (reqData) setRequests(reqData as unknown as Request[]);
+    if (orgData) setOrgs(orgData as OrgOption[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleApprove(id: string) {
+    const { error } = await supabase.from("requests").update({ status: "approved" }).eq("id", id);
+    if (error) { alert("Failed to approve: " + error.message); return; }
+    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: "approved" } : r)));
   }
 
-  function handleSaveDelivery(updated: SelectedDelivery) {
-    if (updated.kind === "active") {
-      setActiveDeliveries((prev) =>
-        prev.map((d) => (d.id === updated.data.id ? updated.data : d))
-      );
-    } else {
-      setPendingDeliveries((prev) =>
-        prev.map((d) => (d.id === updated.data.id ? updated.data : d))
-      );
+  async function handleReject(id: string) {
+    const { error } = await supabase.from("requests").update({ status: "rejected" }).eq("id", id);
+    if (error) { alert("Failed to reject: " + error.message); return; }
+    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r)));
+  }
+
+  async function handleTagChange(id: string, tag: Tag | null) {
+    const { error } = await supabase.from("requests").update({ tag }).eq("id", id);
+    if (error) { alert("Failed to update tag: " + error.message); return; }
+    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, tag } : r)));
+  }
+
+  async function handleCreateDelivery(form: NewDeliveryForm) {
+    // Geocode the pickup address
+    const coords = await geocodeAddress(form.pickupAddress);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not signed in.");
+
+    const { data: newRequest, error: reqErr } = await supabase
+      .from("requests")
+      .insert({
+        organisation_id: form.orgId,
+        description: form.description || null,
+        urgency: form.urgent ? "high" : "medium",
+        status: "pending",
+        created_by_admin: true,
+        pickup_location: `POINT(${coords.lng} ${coords.lat})`,
+      })
+      .select()
+      .single();
+
+    if (reqErr || !newRequest) {
+      throw new Error(reqErr?.message ?? "Failed to create delivery.");
     }
+
+    const { error: itemErr } = await supabase.from("request_items").insert({
+      request_id: newRequest.id,
+      item_type: form.title,
+      quantity: 1,
+    });
+
+    if (itemErr) {
+      await supabase.from("requests").delete().eq("id", newRequest.id);
+      throw new Error(itemErr.message);
+    }
+
+    await load();
   }
 
-  function handleDeleteDelivery(id: string) {
-    setActiveDeliveries((prev) => prev.filter((d) => d.id !== id));
-    setPendingDeliveries((prev) => prev.filter((d) => d.id !== id));
+  const searchLower = search.toLowerCase();
+
+  function filterReqs(list: Request[]) {
+    if (!searchLower) return list;
+    return list.filter(
+      (r) =>
+        shortId(r.id).toLowerCase().includes(searchLower) ||
+        requestTitle(r).toLowerCase().includes(searchLower) ||
+        (r.tag && tagLabel(r.tag)?.toLowerCase().includes(searchLower))
+    );
+  }
+
+  const pendingReqs = filterReqs(requests.filter((r) => r.status === "pending"));
+  const approvedReqs = filterReqs(requests.filter((r) => r.status === "approved"));
+  const activeReqs = filterReqs(
+    requests.filter((r) => r.status === "accepted" || r.status === "in_transit")
+  );
+  const completedReqs = filterReqs(requests.filter((r) => r.status === "delivered"));
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <span className="text-[14px] text-[#5C403B]">Loading deliveries…</span>
+      </div>
+    );
   }
 
   return (
@@ -1110,21 +1086,6 @@ export default function DeliveriesPage() {
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="flex h-10 items-center justify-center rounded-sm px-4 text-[12px] font-medium text-[#1B1B22] transition-colors hover:bg-[rgba(17,24,60,0.05)]"
-          style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          className="flex h-10 items-center justify-center rounded-sm px-4 text-[12px] font-medium text-[#1B1B22] transition-colors hover:bg-[rgba(17,24,60,0.05)]"
-          style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
-        >
-          This Week
-        </button>
-
-        <button
-          type="button"
           onClick={() => setShowNewModal(true)}
           className="flex h-10 items-center gap-2 rounded-sm bg-[#B9100B] px-4 text-[16px] font-normal leading-6 text-white transition-opacity hover:opacity-90"
         >
@@ -1139,7 +1100,7 @@ export default function DeliveriesPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search ID or destination..."
+            placeholder="Search ID, org or tag…"
             className="h-10 w-64 rounded-sm py-1.5 pl-8 pr-3 text-[12px] font-medium text-[#1B1B22] placeholder:text-[#6B7280] focus:outline-none focus:ring-1 focus:ring-[#11183C]"
             style={{ background: "#FBF8FF", border: "1px solid #E5BDB7" }}
           />
@@ -1147,83 +1108,141 @@ export default function DeliveriesPage() {
             <SearchIcon />
           </span>
         </div>
+
+        <button
+          type="button"
+          onClick={load}
+          className="flex h-10 items-center justify-center rounded-sm px-4 text-[12px] font-medium text-[#1B1B22] hover:bg-[rgba(17,24,60,0.05)]"
+          style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Accordion sections */}
       <div className="flex flex-col gap-4">
+
+        {/* ── Pending Review ── */}
+        <AccordionSection
+          title="Pending Review"
+          dotColor="bg-[#B9100B]"
+          countBg="bg-[rgba(185,16,11,0.1)]"
+          countText="text-[#B9100B]"
+          count={pendingReqs.length}
+          open={pendingOpen}
+          onToggle={() => setPendingOpen((v) => !v)}
+        >
+          <PendingReviewTableHeader />
+          {pendingReqs.length === 0 ? (
+            <EmptyState label="No requests pending review" />
+          ) : (
+            pendingReqs.map((r, i) => (
+              <PendingReviewRow
+                key={r.id}
+                req={r}
+                isFirst={i === 0}
+                onClick={() => setSelectedReq(r)}
+                onApprove={() => void handleApprove(r.id)}
+                onReject={() => void handleReject(r.id)}
+              />
+            ))
+          )}
+        </AccordionSection>
+
+        {/* ── Pending Driver Assignment (approved, no driver yet) ── */}
+        <AccordionSection
+          title="Pending Driver Assignment"
+          dotColor="bg-[#B9100B]"
+          countBg="bg-[rgba(185,16,11,0.1)]"
+          countText="text-[#B9100B]"
+          count={approvedReqs.length}
+          open={approvedOpen}
+          onToggle={() => setApprovedOpen((v) => !v)}
+        >
+          <ApprovedTableHeader />
+          {approvedReqs.length === 0 ? (
+            <EmptyState label="No approved deliveries awaiting a driver" />
+          ) : (
+            approvedReqs.map((r, i) => (
+              <ApprovedRow
+                key={r.id}
+                req={r}
+                isFirst={i === 0}
+                onClick={() => setSelectedReq(r)}
+              />
+            ))
+          )}
+        </AccordionSection>
+
         {/* ── Active (In Transit) ── */}
         <AccordionSection
           title="Active (In Transit)"
           dotColor="bg-[#11183C]"
           countBg="bg-[rgba(17,24,60,0.1)]"
           countText="text-[#11183C]"
-          count={activeDeliveries.length}
+          count={activeReqs.length}
           open={activeOpen}
           onToggle={() => setActiveOpen((v) => !v)}
         >
           <ActiveTableHeader />
-          {activeDeliveries.map((d, i) => (
-            <ActiveRow
-              key={d.id}
-              delivery={d}
-              isFirst={i === 0}
-              onClick={() => setSelectedDelivery({ kind: "active", data: d })}
-            />
-          ))}
+          {activeReqs.length === 0 ? (
+            <EmptyState label="No active deliveries in transit" />
+          ) : (
+            activeReqs.map((r, i) => (
+              <ActiveRow
+                key={r.id}
+                req={r}
+                isFirst={i === 0}
+                onClick={() => setSelectedReq(r)}
+              />
+            ))
+          )}
         </AccordionSection>
 
-        {/* ── Pending Driver Assignment ── */}
+        {/* ── Completed ── */}
         <AccordionSection
-          title="Pending Driver Assignment"
-          dotColor="bg-[#B9100B]"
-          countBg="bg-[rgba(185,16,11,0.1)]"
-          countText="text-[#B9100B]"
-          count={pendingDeliveries.length}
-          open={pendingOpen}
-          onToggle={() => setPendingOpen((v) => !v)}
-        >
-          <PendingTableHeader />
-          {pendingDeliveries.map((d, i) => (
-            <PendingRow
-              key={d.id}
-              delivery={d}
-              isFirst={i === 0}
-              onClick={() => setSelectedDelivery({ kind: "pending", data: d })}
-            />
-          ))}
-        </AccordionSection>
-
-        {/* ── Completed (Today) ── */}
-        <AccordionSection
-          title="Completed (Today)"
+          title="Completed"
           dotColor="bg-[#2E7D32]"
           countBg="bg-[rgba(46,125,50,0.1)]"
           countText="text-[#2E7D32]"
-          count={4}
+          count={completedReqs.length}
           open={completedOpen}
           onToggle={() => setCompletedOpen((v) => !v)}
         >
-          <div className="px-3 py-6 text-center text-[13px] text-[#5C403B]">
-            Completed delivery records would appear here.
-          </div>
+          <ActiveTableHeader />
+          {completedReqs.length === 0 ? (
+            <EmptyState label="No completed deliveries" />
+          ) : (
+            completedReqs.map((r, i) => (
+              <ActiveRow
+                key={r.id}
+                req={r}
+                isFirst={i === 0}
+                onClick={() => setSelectedReq(r)}
+              />
+            ))
+          )}
         </AccordionSection>
+
       </div>
 
       {/* New Delivery Modal */}
       {showNewModal && (
         <NewDeliveryModal
+          orgs={orgs}
           onClose={() => setShowNewModal(false)}
           onSubmit={handleCreateDelivery}
         />
       )}
 
-      {/* Delivery Detail / Edit Modal */}
-      {selectedDelivery && (
+      {/* Detail Modal */}
+      {selectedReq && (
         <DeliveryDetailModal
-          selected={selectedDelivery}
-          onClose={() => setSelectedDelivery(null)}
-          onSave={handleSaveDelivery}
-          onDelete={handleDeleteDelivery}
+          req={selectedReq}
+          onClose={() => setSelectedReq(null)}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onTagChange={handleTagChange}
         />
       )}
     </div>

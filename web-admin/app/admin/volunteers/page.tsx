@@ -1,84 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ActiveVolunteer {
+type VolunteerStatus = "pending_vetting" | "active" | "inactive";
+
+interface Volunteer {
   id: string;
-  status: "Active";
-  name: string;
-  nameInitials: string;
-  location: string;
-  dateJoined: string;
+  full_name: string | null;
+  email: string;
+  phone: string | null;
+  status: VolunteerStatus;
+  completed_trips_count: number;
+  created_at: string;
 }
 
-interface PendingVolunteer {
-  id: string;
-  status: "Pending";
-  name: string;
-  nameInitials: string;
-  location: string;
-  requestDate: string;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }) +
+    " • " +
+    d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false })
+  );
 }
 
-// ─── Static seed data ─────────────────────────────────────────────────────────
+function initials(name: string | null): string {
+  if (!name) return "?";
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
 
-const SEED_ACTIVE: ActiveVolunteer[] = [
-  {
-    id: "#VOL-0001",
-    status: "Active",
-    name: "Sarah Mitchell",
-    nameInitials: "SM",
-    location: "Sydney, NSW",
-    dateJoined: "Oct 12 • 14:30",
-  },
-  {
-    id: "#VOL-0002",
-    status: "Active",
-    name: "James Okafor",
-    nameInitials: "JO",
-    location: "Melbourne, VIC",
-    dateJoined: "Oct 12 • 15:15",
-  },
-  {
-    id: "#VOL-0003",
-    status: "Active",
-    name: "Priya Nair",
-    nameInitials: "PN",
-    location: "Brisbane, QLD",
-    dateJoined: "Oct 13 • 09:00",
-  },
-];
-
-const SEED_PENDING: PendingVolunteer[] = [
-  {
-    id: "#VOL-0077",
-    status: "Pending",
-    name: "Tom Beaumont",
-    nameInitials: "TB",
-    location: "Lismore, NSW",
-    requestDate: "Oct 14 • 10:00",
-  },
-  {
-    id: "#VOL-0078",
-    status: "Pending",
-    name: "Anika Weston",
-    nameInitials: "AW",
-    location: "Cairns, QLD",
-    requestDate: "Oct 14 • 11:30",
-  },
-  {
-    id: "#VOL-0079",
-    status: "Pending",
-    name: "Marcus Leung",
-    nameInitials: "ML",
-    location: "Perth, WA",
-    requestDate: "Oct 15 • 08:45",
-  },
-];
-
-// ─── Icon components ──────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function SearchIcon() {
   return (
@@ -121,27 +82,40 @@ function ChevronDownIcon({ open }: Readonly<{ open: boolean }>) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: Readonly<{ status: "Active" | "Pending" }>) {
-  if (status === "Active") {
-    return (
-      <div className="flex items-center gap-1.5 rounded-[2px] bg-[rgba(17,24,60,0.1)] px-2 py-1">
-        <span className="size-1.5 rounded-full bg-[#11183c]" />
-        <span className="text-[11px] font-bold leading-[16.5px] text-[#11183c]">Active</span>
-      </div>
-    );
-  }
+function StatusBadge({ status }: Readonly<{ status: VolunteerStatus }>) {
+  const cfg: Record<VolunteerStatus, { dot: string; bg: string; text: string; label: string }> = {
+    active: {
+      dot: "bg-[#11183c]",
+      bg: "bg-[rgba(17,24,60,0.1)]",
+      text: "text-[#11183c]",
+      label: "Active",
+    },
+    pending_vetting: {
+      dot: "bg-[#b9100b]",
+      bg: "bg-[rgba(185,16,11,0.1)]",
+      text: "text-[#b9100b]",
+      label: "Pending",
+    },
+    inactive: {
+      dot: "bg-[#5c403b]",
+      bg: "bg-[rgba(92,64,59,0.1)]",
+      text: "text-[#5c403b]",
+      label: "Inactive",
+    },
+  };
+  const c = cfg[status];
   return (
-    <div className="flex items-center gap-1.5 rounded-[2px] bg-[rgba(185,16,11,0.1)] px-2 py-1">
-      <span className="size-1.5 rounded-full bg-[#b9100b]" />
-      <span className="text-[11px] font-bold leading-[16.5px] text-[#b9100b]">Pending</span>
+    <div className={`flex items-center gap-1.5 rounded-[2px] px-2 py-1 ${c.bg}`}>
+      <span className={`size-1.5 rounded-full ${c.dot}`} />
+      <span className={`text-[11px] font-bold leading-[16.5px] ${c.text}`}>{c.label}</span>
     </div>
   );
 }
 
-function NameAvatar({ initials }: Readonly<{ initials: string }>) {
+function NameAvatar({ name }: Readonly<{ name: string | null }>) {
   return (
     <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#e5bdb7] bg-[#BEC4F1] text-[9px] font-semibold text-[#11183c]">
-      {initials}
+      {initials(name)}
     </div>
   );
 }
@@ -187,16 +161,14 @@ function AccordionHeader({
 const TABLE_HEADER_CELL = "text-[12px] font-bold uppercase tracking-[0.6px] text-[#5c403b] leading-4";
 const TABLE_CELL_BASE = "flex items-center";
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function EmptyPending() {
+function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-2 py-10 text-center">
       <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
         <circle cx="18" cy="18" r="17" stroke="#e5bdb7" strokeWidth="1.4" />
         <path d="M12 18.5l4 4 8-9" stroke="#b9100b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <p className="text-[13px] font-medium text-[#5c403b]">No pending volunteer requests</p>
+      <p className="text-[13px] font-medium text-[#5c403b]">{label}</p>
     </div>
   );
 }
@@ -206,51 +178,96 @@ function EmptyPending() {
 export default function VolunteersPage() {
   const [activeOpen, setActiveOpen] = useState(true);
   const [pendingOpen, setPendingOpen] = useState(true);
+  const [inactiveOpen, setInactiveOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const [activeVolunteers, setActiveVolunteers] = useState<ActiveVolunteer[]>(SEED_ACTIVE);
-  const [pendingVolunteers, setPendingVolunteers] = useState<PendingVolunteer[]>(SEED_PENDING);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  function handleApprove(vol: PendingVolunteer) {
-    setPendingVolunteers((prev) => prev.filter((v) => v.id !== vol.id));
-    setActiveVolunteers((prev) => [
-      ...prev,
-      {
-        id: vol.id,
-        status: "Active",
-        name: vol.name,
-        nameInitials: vol.nameInitials,
-        location: vol.location,
-        dateJoined: new Date().toLocaleString("en-AU", {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).replace(",", " •"),
-      },
-    ]);
+  const load = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("volunteers")
+      .select("id, full_name, email, phone, status, completed_trips_count, created_at")
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setVolunteers(data as Volunteer[]);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleActivate(vol: Volunteer) {
+    setActionLoading(vol.id);
+    try {
+      const { error } = await supabase
+        .from("volunteers")
+        .update({ status: "active" })
+        .eq("id", vol.id);
+
+      if (error) {
+        alert("Failed to activate volunteer: " + error.message);
+        return;
+      }
+      setVolunteers((prev) =>
+        prev.map((v) => (v.id === vol.id ? { ...v, status: "active" } : v))
+      );
+    } finally {
+      setActionLoading(null);
+    }
   }
 
-  function handleReject(id: string) {
-    setPendingVolunteers((prev) => prev.filter((v) => v.id !== id));
+  async function handleDeactivate(vol: Volunteer) {
+    setActionLoading(vol.id);
+    try {
+      const { error } = await supabase
+        .from("volunteers")
+        .update({ status: "inactive" })
+        .eq("id", vol.id);
+
+      if (error) {
+        alert("Failed to deactivate volunteer: " + error.message);
+        return;
+      }
+      setVolunteers((prev) =>
+        prev.map((v) => (v.id === vol.id ? { ...v, status: "inactive" } : v))
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleReject(vol: Volunteer) {
+    // Rejecting a pending volunteer sets them inactive
+    await handleDeactivate(vol);
   }
 
   const searchLower = search.toLowerCase();
 
-  const filteredActive = activeVolunteers.filter(
-    (v) =>
-      v.id.toLowerCase().includes(searchLower) ||
-      v.name.toLowerCase().includes(searchLower) ||
-      v.location.toLowerCase().includes(searchLower),
-  );
+  function filterVols(list: Volunteer[]) {
+    if (!searchLower) return list;
+    return list.filter(
+      (v) =>
+        (v.full_name ?? "").toLowerCase().includes(searchLower) ||
+        v.email.toLowerCase().includes(searchLower)
+    );
+  }
 
-  const filteredPending = pendingVolunteers.filter(
-    (v) =>
-      v.id.toLowerCase().includes(searchLower) ||
-      v.name.toLowerCase().includes(searchLower) ||
-      v.location.toLowerCase().includes(searchLower),
-  );
+  const pendingVols = filterVols(volunteers.filter((v) => v.status === "pending_vetting"));
+  const activeVols = filterVols(volunteers.filter((v) => v.status === "active"));
+  const inactiveVols = filterVols(volunteers.filter((v) => v.status === "inactive"));
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <span className="text-[14px] text-[#5C403B]">Loading volunteers…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -274,10 +291,17 @@ export default function VolunteersPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search ID, name or location"
+            placeholder="Search name or email"
             className="h-10 w-72 rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] pl-8 pr-3 text-[12px] font-medium text-[#1b1b22] placeholder:text-[#6b7280] focus:outline-none focus:ring-1 focus:ring-[#b9100b]"
           />
         </div>
+        <button
+          type="button"
+          onClick={load}
+          className="flex h-10 items-center rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] px-4 text-[12px] font-medium text-[#1b1b22] transition-colors hover:bg-[rgba(17,24,60,0.04)]"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Accordion Container */}
@@ -289,7 +313,7 @@ export default function VolunteersPage() {
             <AccordionHeader
               dotColor="#b9100b"
               title="Pending Approval"
-              count={pendingVolunteers.length}
+              count={pendingVols.length}
               countBg="rgba(185,16,11,0.1)"
               countColor="#b9100b"
               open={pendingOpen}
@@ -299,67 +323,56 @@ export default function VolunteersPage() {
 
           {pendingOpen && (
             <div>
-              {/* Table header */}
               <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Volunteer ID</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Status</span>
-                </div>
-                <div className="col-span-3">
-                  <span className={TABLE_HEADER_CELL}>Full Name</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Location</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Request Date</span>
-                </div>
-                <div className="col-span-1">
-                  <span className={TABLE_HEADER_CELL}>Actions</span>
-                </div>
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Status</span></div>
+                <div className="col-span-3"><span className={TABLE_HEADER_CELL}>Full Name</span></div>
+                <div className="col-span-3"><span className={TABLE_HEADER_CELL}>Email</span></div>
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Applied</span></div>
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Actions</span></div>
               </div>
 
-              {filteredPending.length === 0 ? (
-                <EmptyPending />
+              {pendingVols.length === 0 ? (
+                <EmptyState label="No pending volunteer requests" />
               ) : (
-                filteredPending.map((vol, idx) => (
+                pendingVols.map((vol, idx) => (
                   <div
                     key={vol.id}
                     className="grid grid-cols-12 gap-4 px-3 py-3"
                     style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
                   >
                     <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                      <span className="text-[12px] font-bold tracking-[0.6px] text-[#1b1b22]">{vol.id}</span>
-                    </div>
-                    <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
                       <StatusBadge status={vol.status} />
                     </div>
                     <div className={`col-span-3 ${TABLE_CELL_BASE} gap-2 overflow-hidden`}>
-                      <NameAvatar initials={vol.nameInitials} />
-                      <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{vol.name}</span>
+                      <NameAvatar name={vol.full_name} />
+                      <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">
+                        {vol.full_name ?? "—"}
+                      </span>
+                    </div>
+                    <div className={`col-span-3 ${TABLE_CELL_BASE} overflow-hidden`}>
+                      <span className="truncate text-[12px] text-[#5c403b]">{vol.email}</span>
                     </div>
                     <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                      <span className="text-[13px] leading-[18px] text-[#5c403b]">{vol.location}</span>
+                      <span className="text-[13px] leading-[18px] text-[#5c403b]">
+                        {formatDate(vol.created_at)}
+                      </span>
                     </div>
-                    <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                      <span className="text-[13px] leading-[18px] text-[#5c403b]">{vol.requestDate}</span>
-                    </div>
-                    <div className={`col-span-1 ${TABLE_CELL_BASE} gap-2`}>
+                    <div className={`col-span-2 ${TABLE_CELL_BASE} gap-2`}>
                       <button
                         type="button"
-                        onClick={() => handleApprove(vol)}
+                        onClick={() => handleActivate(vol)}
+                        disabled={actionLoading === vol.id}
                         title="Approve"
-                        className="flex size-7 items-center justify-center rounded-[2px] bg-[#2e7d32] transition-opacity hover:opacity-80"
+                        className="flex size-7 items-center justify-center rounded-[2px] bg-[#2e7d32] transition-opacity hover:opacity-80 disabled:opacity-50"
                       >
                         <CheckIcon />
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleReject(vol.id)}
+                        onClick={() => handleReject(vol)}
+                        disabled={actionLoading === vol.id}
                         title="Reject"
-                        className="flex size-7 items-center justify-center rounded-[2px] bg-[#b9100b] transition-opacity hover:opacity-80"
+                        className="flex size-7 items-center justify-center rounded-[2px] bg-[#b9100b] transition-opacity hover:opacity-80 disabled:opacity-50"
                       >
                         <XIcon />
                       </button>
@@ -377,7 +390,7 @@ export default function VolunteersPage() {
             <AccordionHeader
               dotColor="#11183c"
               title="Active Volunteers"
-              count={activeVolunteers.length}
+              count={activeVols.length}
               countBg="rgba(17,24,60,0.1)"
               countColor="#11183c"
               open={activeOpen}
@@ -387,50 +400,114 @@ export default function VolunteersPage() {
 
           {activeOpen && (
             <div>
-              {/* Table header */}
               <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Volunteer ID</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Status</span>
-                </div>
-                <div className="col-span-4">
-                  <span className={TABLE_HEADER_CELL}>Full Name</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Location</span>
-                </div>
-                <div className="col-span-2">
-                  <span className={TABLE_HEADER_CELL}>Date Joined</span>
-                </div>
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Status</span></div>
+                <div className="col-span-3"><span className={TABLE_HEADER_CELL}>Full Name</span></div>
+                <div className="col-span-3"><span className={TABLE_HEADER_CELL}>Email</span></div>
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Trips Done</span></div>
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Action</span></div>
               </div>
 
-              {/* Rows */}
-              {filteredActive.map((vol, idx) => (
-                <div
-                  key={vol.id}
-                  className="grid grid-cols-12 gap-4 px-3 py-3"
-                  style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
-                >
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[12px] font-bold tracking-[0.6px] text-[#1b1b22]">{vol.id}</span>
+              {activeVols.length === 0 ? (
+                <EmptyState label="No active volunteers" />
+              ) : (
+                activeVols.map((vol, idx) => (
+                  <div
+                    key={vol.id}
+                    className="grid grid-cols-12 gap-4 px-3 py-3"
+                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                  >
+                    <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
+                      <StatusBadge status={vol.status} />
+                    </div>
+                    <div className={`col-span-3 ${TABLE_CELL_BASE} gap-2 overflow-hidden`}>
+                      <NameAvatar name={vol.full_name} />
+                      <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">
+                        {vol.full_name ?? "—"}
+                      </span>
+                    </div>
+                    <div className={`col-span-3 ${TABLE_CELL_BASE} overflow-hidden`}>
+                      <span className="truncate text-[12px] text-[#5c403b]">{vol.email}</span>
+                    </div>
+                    <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
+                      <span className="text-[13px] leading-[18px] text-[#5c403b]">
+                        {vol.completed_trips_count}
+                      </span>
+                    </div>
+                    <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
+                      <button
+                        type="button"
+                        disabled={actionLoading === vol.id}
+                        onClick={() => handleDeactivate(vol)}
+                        className="text-[11px] font-bold tracking-[0.6px] text-[#b9100b] hover:underline disabled:opacity-50"
+                      >
+                        {actionLoading === vol.id ? "…" : "Deactivate"}
+                      </button>
+                    </div>
                   </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <StatusBadge status={vol.status} />
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Inactive Volunteers ── */}
+        <div className="overflow-hidden rounded-[4px] border border-[#e5bdb7] bg-white">
+          <div className="bg-[#f5f2fc]">
+            <AccordionHeader
+              dotColor="#5c403b"
+              title="Inactive Volunteers"
+              count={inactiveVols.length}
+              countBg="rgba(92,64,59,0.1)"
+              countColor="#5c403b"
+              open={inactiveOpen}
+              onToggle={() => setInactiveOpen((v) => !v)}
+            />
+          </div>
+
+          {inactiveOpen && (
+            <div>
+              <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Status</span></div>
+                <div className="col-span-4"><span className={TABLE_HEADER_CELL}>Full Name</span></div>
+                <div className="col-span-4"><span className={TABLE_HEADER_CELL}>Email</span></div>
+                <div className="col-span-2"><span className={TABLE_HEADER_CELL}>Action</span></div>
+              </div>
+
+              {inactiveVols.length === 0 ? (
+                <EmptyState label="No inactive volunteers" />
+              ) : (
+                inactiveVols.map((vol, idx) => (
+                  <div
+                    key={vol.id}
+                    className="grid grid-cols-12 gap-4 px-3 py-3"
+                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                  >
+                    <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
+                      <StatusBadge status={vol.status} />
+                    </div>
+                    <div className={`col-span-4 ${TABLE_CELL_BASE} gap-2 overflow-hidden`}>
+                      <NameAvatar name={vol.full_name} />
+                      <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">
+                        {vol.full_name ?? "—"}
+                      </span>
+                    </div>
+                    <div className={`col-span-4 ${TABLE_CELL_BASE} overflow-hidden`}>
+                      <span className="truncate text-[12px] text-[#5c403b]">{vol.email}</span>
+                    </div>
+                    <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
+                      <button
+                        type="button"
+                        disabled={actionLoading === vol.id}
+                        onClick={() => handleActivate(vol)}
+                        className="text-[11px] font-bold tracking-[0.6px] text-[#2e7d32] hover:underline disabled:opacity-50"
+                      >
+                        {actionLoading === vol.id ? "…" : "Reactivate"}
+                      </button>
+                    </div>
                   </div>
-                  <div className={`col-span-4 ${TABLE_CELL_BASE} gap-2 overflow-hidden`}>
-                    <NameAvatar initials={vol.nameInitials} />
-                    <span className="truncate text-[13px] leading-[18px] text-[#1b1b22]">{vol.name}</span>
-                  </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[13px] leading-[18px] text-[#5c403b]">{vol.location}</span>
-                  </div>
-                  <div className={`col-span-2 ${TABLE_CELL_BASE}`}>
-                    <span className="text-[13px] leading-[18px] text-[#5c403b]">{vol.dateJoined}</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
