@@ -629,11 +629,56 @@ export default async function volunteerProfileAPI(
       status: "open",
     });
 
-    if (error) {return reply.status(400).send({ message: "Failed to create support ticket" })};
+    if (error) {return reply.status(400).send({ message: "Failed to create support ticket", error:error })};
 
     return reply.status(201).send({ message: "Support ticket submitted successfully" });
 
   });
   
+  app.get("/volunteers/view-ticket", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    const { data, error} = await supabaseUser
+    .from("support_tickets")
+    .select(`
+        subject,
+        message,
+        status
+    `)
+    .eq("volunteer_id", user.id)
+    
+
+    if (error) {return reply.status(500).send({ error: error, message: "Cound not find relevant tickets"})};
+
+    return reply.status(200).send(data);
+
+  });
 
 }
