@@ -295,7 +295,7 @@ export default async function volunteerProfileAPI(
         .from("volunteers")
         .insert({
           id: userId,
-          email,
+          email: email,
           full_name: full_name,
           phone: phone ?? null,
           // vehicle_type: vehicleType ?? null,
