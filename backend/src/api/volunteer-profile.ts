@@ -4,23 +4,38 @@ import type { FastifyInstance } from "fastify";
 import { createClient } from "@supabase/supabase-js";
 import { hashSecurityAnswer } from "../utils/security-answer.js";
 import { verifySecurityAnswer } from "../utils/security-answer.js";
+import * as process from "process";
 
 const app = Fastify({ logger: true });
 
 
 // initialise Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_PUBLISHABLE_KEY!
-);
 
 
-const supabaseUrl = process.env.SUPABASE_URL ? process.env.SUPABASE_URL : "error";
+const supabaseUrl = process.env.SUPABASE_URL ? process.env.SUPABASE_URL : "";
 const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY
 
-if (!supabaseUrl || !supabasePublishableKey) {
+if (!supabasePublishableKey || !supabaseSecretKey) {
   throw new Error("Missing Supabase environment variables");
 }
+
+const supabase = createClient(
+  supabaseUrl,
+  supabasePublishableKey
+);
+
+const supabaseAdmin = createClient(
+  supabaseUrl,
+  supabaseSecretKey,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  }
+);
 
 
 export default async function volunteerProfileAPI(
@@ -65,7 +80,17 @@ export default async function volunteerProfileAPI(
     // get volunteer profile, check for profile existence
     const { data, error } = await supabaseUser
       .from("volunteers")
-      .select("*")
+      .select(`
+        id,
+        email,
+        full_name,
+        phone,
+        vehicle_type,
+        availability,
+        preferred_package_size,
+        status,
+        created_at
+      `)
       .eq("id", user.id)
       .single();
 
@@ -229,12 +254,12 @@ export default async function volunteerProfileAPI(
       // hash security answers
       var a_one_hashed, a_two_hashed;
       if (security_answer_one){
-        a_one_hashed = hashSecurityAnswer(security_answer_one);
+        a_one_hashed = await hashSecurityAnswer(security_answer_one);
       } else {
         a_one_hashed = null;
       }
-      if (security_answer_one){
-        a_two_hashed = hashSecurityAnswer(security_answer_one);
+      if (security_answer_two){
+        a_two_hashed = await hashSecurityAnswer(security_answer_two);
       } else {
         a_two_hashed = null;
       }
@@ -287,6 +312,28 @@ export default async function volunteerProfileAPI(
         });
 
       if (volunteerError) {
+        request.log.error(
+          { err: volunteerError, userId },
+          "Failed to create volunteer profile"
+        );
+      
+        try {
+          const { error: deleteError } =
+            await supabaseAdmin.auth.admin.deleteUser(userId);
+      
+          if (deleteError) {
+            request.log.error(
+              { err: deleteError, userId },
+              "Failed to clean up Supabase Auth user"
+            );
+          }
+        } catch (cleanupError) {
+          request.log.error(
+            { err: cleanupError, userId },
+            "Unexpected error while cleaning up Auth user"
+          );
+        }
+      
         return reply.status(500).send({
           error: "Failed to create volunteer application",
         });
@@ -544,7 +591,7 @@ export default async function volunteerProfileAPI(
           volunteer.security_answer_two
         );
 
-        if (!answerOneValid || !answerTwoValid) {
+        if (!(answerOneValid || answerTwoValid)) {
           return reply.status(400).send({
             error: "IDENTITY_ERROR",
             message: "Unable to verify identity",
