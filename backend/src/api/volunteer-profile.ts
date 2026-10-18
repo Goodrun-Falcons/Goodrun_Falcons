@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { hashSecurityAnswer } from "../utils/security-answer.js";
 import { verifySecurityAnswer } from "../utils/security-answer.js";
 import * as process from "process";
+import { REPL_MODE_SLOPPY } from "repl";
 
 const app = Fastify({ logger: true });
 
@@ -447,111 +448,71 @@ export default async function volunteerProfileAPI(
     }
   });
 
+
+  app.post("/volunteers/security-questions", async (request, reply) => {
+    const body = request.body as { email: string; };
+    const{ email } = body;
+
+    const {data: questions, error} = await supabaseAdmin
+      .from("volunteers")
+      .select("security_question_one, security_question_two")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (error) {
+      return reply.status(400).send({error: error});
+    }
+
+    return reply.send(questions);
+  });
   
-  type ResetPasswordBody = {
-    security_question_one: string;
-    security_answer_one: string;
-    security_question_two: string;
-    security_answer_two: string;
-    new_password: string;
-  };
 
-  function normaliseQuestion(question: string): string {
-    return question
-      .normalize("NFKC")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toLowerCase();
-  }
-
-  app.post<{ Body: ResetPasswordBody }>(
-    "/volunteers/reset-password",
-    async (request, reply) => {
+  app.post("/volunteers/reset-password", async (request, reply) => {
       try {
-        // read the access token from the request header.
-        const token = request.headers.authorization
-        ?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-
-        if (!token) {
-          return reply.status(401).send({
-            error: "Authentication required",
-          });
+        const body = request.body as {
+          email: string;
+          security_answer_one: string;
+          security_answer_two: string;
+          new_password: string;
         }
-
-        // validate the request body.
         const {
-          security_question_one,
+          email,
           security_answer_one,
-          security_question_two,
           security_answer_two,
           new_password,
-        } = request.body ?? ({} as ResetPasswordBody);
+        } = body;
 
-        if (
-          typeof security_question_one !== "string" ||
-          typeof security_answer_one !== "string" ||
-          typeof security_question_two !== "string" ||
-          typeof security_answer_two !== "string" ||
-          typeof new_password !== "string" ||
-          !security_question_one.trim() ||
-          !security_answer_one.trim() ||
-          !security_question_two.trim() ||
-          !security_answer_two.trim() ||
-          !new_password
-        ) {
-          return reply.status(400).send({
-            error: "All fields are required",
-          });
-        }
-
-        if (new_password.length < 8) {
+      
+        if (new_password.length < 6) {
           return reply.status(400).send({
             error: "New password does not meet the requirements",
           });
         }
 
-        // create a client scoped to this user's token.
-        const supabaseUser = createClient(
-          process.env.SUPABASE_URL!,
-          process.env.SUPABASE_PUBLISHABLE_KEY!,
-          {
-            accessToken: async() => token
-          }
-        )
+        const normalisedEmail = email.trim().toLowerCase();
 
-        // validate the token and obtain the trusted user ID.
-        const {
-          data: { user },
-          error: authError,
-        } = await supabaseUser.auth.getUser(token);
-
-        if (authError || !user) {
-          return reply.status(401).send({
-            error: "Invalid or expired access token",
-          });
-        }
-
-        // read this user's security questions and answer hashes.
+        // find the volunteer using the server-side admin client.
         const { data: volunteer, error: lookupError } =
-        await supabaseUser
-          .from("volunteers")
-          .select(
-            "id, security_question_one, security_question_two, security_answer_one, security_answer_two"
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+          await supabaseAdmin
+            .from("volunteers")
+            .select(
+              "id, security_question_one, security_question_two, security_answer_one, security_answer_two"
+            )
+            .ilike("email", normalisedEmail)
+            .maybeSingle();
 
         if (lookupError) {
           request.log.error(
-            { err: lookupError, userId: user.id },
-            "Failed to retrieve volunteer security settings"
+            { err: lookupError },
+            "Failed to look up volunteer for password reset"
           );
 
           return reply.status(500).send({
-            error: "Unable to process password change",
+            error: "Unable to process password reset",
           });
         }
 
+        
         if (
           !volunteer ||
           !volunteer.security_answer_one ||
@@ -559,85 +520,40 @@ export default async function volunteerProfileAPI(
         ) {
           return reply.status(400).send({
             error: "IDENTITY_ERROR",
-            message: "Unable to verify identity",
-          });
+            message: "Unable to verify identity or reset password",
+          });;
         }
 
-        // check the submitted questions.
-        const questionsMatch =
-          normaliseQuestion(security_question_one) ===
-            normaliseQuestion(
-              volunteer.security_question_one ?? ""
-            ) &&
-          normaliseQuestion(security_question_two) ===
-            normaliseQuestion(
-              volunteer.security_question_two ?? ""
-            );
-
-        if (!questionsMatch) {
-          return reply.status(400).send({
-            error: "IDENTITY_ERROR",
-            message: "Unable to verify identity",
-          });
-        }
-
-        // verify both answers against their stored hashes.
+        // verify the answers against their stored hashes.
         const answerOneValid = await verifySecurityAnswer(
           security_answer_one,
           volunteer.security_answer_one
         );
-        
+
         const answerTwoValid = await verifySecurityAnswer(
           security_answer_two,
           volunteer.security_answer_two
         );
 
-        if (!(answerOneValid || answerTwoValid)) {
+        if (!answerOneValid || !answerTwoValid) {
           return reply.status(400).send({
             error: "IDENTITY_ERROR",
-            message: "Unable to verify identity",
+            message: "Unable to verify identity or reset password",
           });
         }
 
-        // update the password using the authenticated user's token.
-        const updateResponse = await fetch(
-          `${supabaseUrl.replace(/\/+$/, "")}/auth/v1/user`,
-          {
-            method: "PUT",
-            headers: {
-              apikey: process.env.SUPABASE_PUBLISHABLE_KEY!,
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              password: new_password,
-            }),
-          }
-        );
-
-        if (!updateResponse.ok) {
-          request.log.warn(
-            {
-              statusCode: updateResponse.status,
-              userId: user.id,
-            },
-            "Supabase Auth rejected password update"
+        // update the user's Auth password.
+        const { error: updateError } =
+          await supabaseAdmin.auth.admin.updateUserById(
+            volunteer.id,
+            { password: new_password }
           );
 
-          if (
-            updateResponse.status === 400 ||
-            updateResponse.status === 422
-          ) {
-            return reply.status(400).send({
-              error: "New password was rejected",
-            });
-          }
-
-          if (updateResponse.status === 401) {
-            return reply.status(401).send({
-              error: "Invalid or expired access token",
-            });
-          }
+        if (updateError) {
+          request.log.error(
+            { err: updateError, userId: volunteer.id },
+            "Failed to update password"
+          );
 
           return reply.status(500).send({
             error: "Unable to update password",
@@ -645,20 +561,21 @@ export default async function volunteerProfileAPI(
         }
 
         return reply.status(200).send({
-          message: "Password updated successfully",
+          message: "Password reset successfully",
         });
       } catch (error) {
         request.log.error(
           { err: error },
-          "Unexpected password change error"
+          "Unexpected password reset error"
         );
 
         return reply.status(500).send({
-          error: "Unable to process password change",
+          error: "Unable to process password reset",
         });
       }
     }
   );
+
 
   
 
