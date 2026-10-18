@@ -1,50 +1,141 @@
-import { useState } from 'react';
-import { Keyboard , Modal , Pressable , ScrollView , StyleSheet , TextInput , View, } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { MaterialIcons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { ThemedText } from '@/components/themed-text';
-import { BrandColors, FontFamily, Radius, Spacing, } from '@/constants/theme';
+import { BrandColors, Radius, Spacing, Typography } from '@/constants/theme';
+
+const fieldIcons = {
+  fullName: 'person-outline',
+  email: 'mail-outline',
+  phone: 'phone',
+  preferredPackageSize: 'inventory-2',
+} as const;
+
+const packageOptions = [
+  { value: 'small', title: 'Small', description: 'Fits on one seat' },
+  { value: 'medium', title: 'Medium', description: 'Uses the whole back seat' },
+  { value: 'large', title: 'Large', description: 'Requires a truck' },
+];
+
+const PROFILE_URL = 'https://goodrun-backend.onrender.com/volunteers/me';
+
+const PROFILE_URL = 'https://goodrun-backend.onrender.com/volunteers/me';
 
 type Profile = {
   fullName: string;
   email: string;
   phone: string;
-  serviceArea: string;
-  vehicleType: string;
+  preferredPackageSize: string;
 };
 
-
 const initialProfile: Profile = {
-  fullName: 'abcd efgh',
-  email: 'abcde@abcde.com',
-  phone: '+64 123456789',
-  serviceArea: 'Carlton',
-  vehicleType: 'SUV',
+  fullName: '',
+  email: '',
+  phone: '',
+  preferredPackageSize: '',
 };
 
 const fields: { key: keyof Profile; label: string }[] = [
   { key: 'fullName', label: 'Full Name' },
   { key: 'email', label: 'Email Address' },
   { key: 'phone', label: 'Phone Number' },
-  { key: 'serviceArea', label: 'Service Area' },
-  { key: 'vehicleType', label: 'Vehicle Type' },
+  { key: 'preferredPackageSize', label: 'Preferred Package Size' },
 ];
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
-  const [profile] = useState<Profile>(initialProfile);
+  const [profile, setProfile] = useState<Profile>(initialProfile);
   const [draft, setDraft] = useState<Profile>(initialProfile);
-  const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showLogout, setShowLogout] = useState(false);
 
-  const hasPendingRequest = pendingProfile !== null;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      setIsLoading(true);
+      setError('');
+
+      try {
+        const token = await SecureStore.getItemAsync('accessToken');
+        if (cancelled) return;
+
+        if (!token) {
+          router.replace('/login');
+          return;
+        }
+
+        const response = await fetch(PROFILE_URL, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (cancelled) return;
+
+        if (response.status === 401) {
+          setError('Your session has expired. Please log in again.');
+          return;
+        }
+
+        if (!response.ok) {
+          setError('Unable to load your profile. Please try again.');
+          return;
+        }
+
+        const data = await response.json();
+        if (cancelled) return;
+
+        const loadedProfile: Profile = {
+          fullName: data.full_name ?? '',
+          email: data.email ?? '',
+          phone: data.phone ?? '',
+          preferredPackageSize: data.preferred_package_size ?? '',
+        };
+
+        setProfile(loadedProfile);
+        setDraft({ ...loadedProfile });
+        setHasLoaded(true);
+      } catch {
+        if (!cancelled) {
+          setError('Unable to connect to the server. Please try again.');
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadVersion]);
+
   const values = isEditing ? draft : profile;
 
   //extract capitalized first letters of surname and given name
@@ -67,7 +158,7 @@ export default function ProfileScreen() {
   }
 
   function startEditing() {
-    if (hasPendingRequest) return;
+    if (isSaving || !hasLoaded) return;
 
     setDraft({ ...profile });
     setError('');
@@ -84,47 +175,86 @@ export default function ProfileScreen() {
     Keyboard.dismiss();
   }
 
-  function submitProfileRequest() {
-    if (hasPendingRequest) return;
+  const submitProfileRequest = async () => {
+    if (isSaving) return;
 
-    const requestedProfile: Profile = {
-      fullName: draft.fullName.trim(),
-      email: draft.email.trim(),
-      phone: draft.phone.trim(),
-      serviceArea: draft.serviceArea.trim(),
-      vehicleType: draft.vehicleType.trim(),
-    };
+    const phone = draft.phone.replace(/[\s()-]/g, '');
+    const preferredPackageSize = draft.preferredPackageSize;
 
-    if (
-      Object.values(requestedProfile).some((value) => !value)
-    ) {
-      setError('Please complete all fields.');
-      return;
-    }
-
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requestedProfile.email)
-    ) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    const hasChanges = fields.some(
-      ({ key }) => requestedProfile[key] !== profile[key]
-    );
-
-    if (!hasChanges) {
-      setError('Please make a change before submitting.');
-      return;
-    }
-
-    setPendingProfile({ ...requestedProfile });
-    setDraft({ ...profile });
-    setIsEditing(false);
     setError('');
     setNotice('');
+
+    if (!phone) {
+      setError('Please enter your phone number.');
+      return;
+    }
+
+    if (!/^(?:04\d{8}|\+614\d{8})$/.test(phone)) {
+      setError('Please enter a valid Australian mobile number (04xxxxxxxx or +614xxxxxxxx).');
+      return;
+    }
+
+    if (!['small', 'medium', 'large'].includes(preferredPackageSize)) {
+      setError('Please select a preferred package size.');
+      return;
+    }
+
+    if (phone === profile.phone && preferredPackageSize === profile.preferredPackageSize) {
+      setError('You have not made any changes.');
+      return;
+    }
+
+    setIsSaving(true);
     Keyboard.dismiss();
-  }
+
+    try {
+      const token = await SecureStore.getItemAsync('accessToken');
+
+      if (!token) {
+        setError('Your session has expired. Please log in again.');
+        return;
+      }
+
+      const response = await fetch(PROFILE_URL, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone,
+          preferred_package_size: preferredPackageSize,
+        }),
+      });
+
+      if (response.status === 401) {
+        setError('Your session has expired. Please log in again.');
+        return;
+      }
+
+      if (!response.ok) {
+        setError('Unable to save your profile. Please try again.');
+        return;
+      }
+
+      const data = await response.json();
+
+      const updatedProfile: Profile = {
+        ...profile,
+        phone: data.phone ?? phone,
+        preferredPackageSize: data.preferred_package_size ?? preferredPackageSize,
+      };
+
+      setProfile(updatedProfile);
+      setDraft({ ...updatedProfile });
+      setIsEditing(false);
+      setNotice('Your profile has been updated.');
+    } catch {
+      setError('Unable to connect to the server. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   function openLogoutConfirmation() {
     Keyboard.dismiss();
@@ -132,272 +262,268 @@ export default function ProfileScreen() {
     setShowLogout(true);
   }
 
-  function logout() {
+  async function logout() {
     setShowLogout(false);
-    router.replace('/login');
+
+    try {
+      await SecureStore.deleteItemAsync('accessToken');
+      await SecureStore.deleteItemAsync('refreshToken');
+
+      router.replace('/login');
+    } catch (error) {
+      console.error('Failed to clear authentication tokens:', error);
+      setError('Unable to log out. Please try again.');
+    }
   }
+
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <StatusBar style="dark" />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View
-          style={[
-            styles.header,
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
             {
-              paddingTop: insets.top + Spacing.lg,
+              paddingTop: insets.top + Spacing.md,
+              paddingBottom: insets.bottom + Spacing.xl,
               paddingLeft: Math.max(insets.left, Spacing.lg),
               paddingRight: Math.max(insets.right, Spacing.lg),
             },
           ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          <View style={styles.headerRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={goBack}
-              style={({ pressed }) => [
-                styles.iconButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={styles.backArrow} />
-            </Pressable>
-          </View>
-
-          <View style={styles.identity}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <ThemedText style={styles.initials}>
-                  {initials}
-                </ThemedText>
-              </View>
-
+          <View style={styles.content}>
+            <View style={styles.headerRow}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Change profile photo"
-                onPress={() =>
-                  setNotice(
-                    'Profile photo upload is not available yet.'
-                  )
-                }
-                style={({ pressed }) => [
-                  styles.cameraButton,
-                  pressed && styles.pressed,
-                ]}
+                accessibilityLabel="Go back"
+                disabled={isSaving}
+                onPress={goBack}
+                style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
               >
-                <View style={styles.cameraBody}>
-                  <View style={styles.cameraTop} />
-                  <View style={styles.cameraLens} />
-                </View>
+                <MaterialIcons name="arrow-back" size={24} color={BrandColors.navy} />
               </Pressable>
+              <ThemedText accessibilityRole="header" style={styles.pageTitle}>
+                My profile
+              </ThemedText>
             </View>
 
-            <ThemedText type="heading" style={styles.name}>
-              {profile.fullName}
-            </ThemedText>
+            {isLoading ? (
+              <View style={styles.loading} accessibilityLiveRegion="polite">
+                <ActivityIndicator color={BrandColors.navy} />
+                <ThemedText style={styles.body}>Loading your profile…</ThemedText>
+              </View>
+            ) : (
+              <>
+                {hasLoaded && (
+                  <>
+                    <View style={styles.identity}>
+                      <View style={styles.avatar}>
+                        {initials ? (
+                          <ThemedText style={styles.initials}>{initials}</ThemedText>
+                        ) : (
+                          <MaterialIcons name="person-outline" size={36} color={BrandColors.navy} />
+                        )}
+                      </View>
+                      <ThemedText accessibilityRole="header" style={styles.name}>
+                        {profile.fullName || 'Your profile'}
+                      </ThemedText>
+                      <ThemedText style={styles.body}>GoodRun volunteer</ThemedText>
+                    </View>
 
-            <ThemedText style={styles.subtitle}>
-              Active Medical Volunteer
-            </ThemedText>
-          </View>
-        </View>
+                    <View style={styles.informationCard}>
+                      <MaterialIcons
+                        name={isEditing ? 'edit-note' : 'info-outline'}
+                        size={24}
+                        color={BrandColors.navy}
+                      />
+                      <View style={styles.flex}>
+                        <ThemedText style={styles.label}>
+                          {isEditing ? 'Update your details' : 'Your volunteer details'}
+                        </ThemedText>
+                        <ThemedText style={styles.hint}>
+                          You can update your phone number and preferred package size. Your name and
+                          email are read-only.
+                        </ThemedText>
+                      </View>
+                    </View>
 
-        <View
-          style={[
-            styles.form,
-            {
-              paddingBottom: insets.bottom + Spacing.xxxl,
-              paddingLeft: Math.max(insets.left, Spacing.lg),
-              paddingRight: Math.max(insets.right, Spacing.lg),
-            },
-          ]}
-        >
-          <View style={styles.informationCard}>
-            <ThemedText type="smallBold" style={styles.label}>
-              {isEditing
-                ? 'Request Profile Change'
-                : 'Approved Profile'}
-            </ThemedText>
+                    <View style={styles.detailsCard}>
+                      <ThemedText accessibilityRole="header" style={styles.sectionTitle}>
+                        Personal information
+                      </ThemedText>
+                      {fields.map(({ key, label }, index) => (
+                        <View key={key} style={[styles.field, index > 0 && styles.fieldDivider]}>
+                          <View style={styles.labelRow}>
+                            <MaterialIcons name={fieldIcons[key]} size={19} color="#60646C" />
+                            <ThemedText style={styles.fieldLabel}>{label}</ThemedText>
+                            {isEditing && (key === 'fullName' || key === 'email') && (
+                              <MaterialIcons
+                                name="lock-outline"
+                                size={16}
+                                color="#60646C"
+                                accessibilityLabel="Read-only"
+                              />
+                            )}
+                          </View>
+                          {isEditing && key === 'preferredPackageSize' ? (
+                            <View style={styles.sizeOptions}>
+                              {packageOptions.map((option) => {
+                                const selected = draft.preferredPackageSize === option.value;
+                                return (
+                                  <Pressable
+                                    key={option.value}
+                                    disabled={isSaving}
+                                    accessibilityRole="radio"
+                                    accessibilityLabel={`${option.title}: ${option.description}`}
+                                    accessibilityState={{ checked: selected, disabled: isSaving }}
+                                    onPress={() => {
+                                      setDraft((previous) => ({
+                                        ...previous,
+                                        preferredPackageSize: option.value,
+                                      }));
+                                      setError('');
+                                    }}
+                                    style={({ pressed }) => [
+                                      styles.sizeOption,
+                                      selected && styles.selectedSizeOption,
+                                      pressed && styles.pressed,
+                                    ]}
+                                  >
+                                    <View style={styles.flex}>
+                                      <ThemedText style={styles.label}>{option.title}</ThemedText>
+                                      <ThemedText style={styles.hint}>
+                                        {option.description}
+                                      </ThemedText>
+                                    </View>
+                                    <MaterialIcons
+                                      name={
+                                        selected ? 'radio-button-checked' : 'radio-button-unchecked'
+                                      }
+                                      size={22}
+                                      color={BrandColors.navy}
+                                    />
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          ) : isEditing && key === 'phone' ? (
+                            <TextInput
+                              accessibilityLabel={label}
+                              value={draft.phone}
+                              editable={!isSaving}
+                              onChangeText={(value) => {
+                                setDraft((previous) => ({ ...previous, phone: value }));
+                                setError('');
+                              }}
+                              keyboardType="phone-pad"
+                              autoComplete="tel"
+                              selectionColor={BrandColors.navy}
+                              placeholder="04xx xxx xxx"
+                              placeholderTextColor="#727581"
+                              style={styles.input}
+                            />
+                          ) : (
+                            <ThemedText selectable style={styles.value}>
+                              {key === 'preferredPackageSize'
+                                ? packageOptions.find((option) => option.value === values[key])
+                                    ?.title ||
+                                  values[key] ||
+                                  'Not provided'
+                                : values[key] || 'Not provided'}
+                            </ThemedText>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
 
-            <ThemedText style={styles.informationText}>
-              {isEditing
-                ? 'Enter your proposed changes below. Your current details will remain active until an admin approves your request.'
-                : 'These are your currently approved details. Changes require admin approval.'}
-            </ThemedText>
-
-            <ThemedText style={styles.previewText}>
-              Preview only: requests are not sent to an admin
-              and will be lost when this page is reloaded.
-            </ThemedText>
-          </View>
-
-          {fields.map(({ key, label }) => (
-            <View key={key} style={styles.field}>
-              <ThemedText
-                type="smallBold"
-                style={styles.label}
-              >
-                {label}
-              </ThemedText>
-
-              <TextInput
-                accessibilityLabel={label}
-                value={values[key]}
-                editable={isEditing && !hasPendingRequest}
-                onChangeText={(value) => {
-                  setDraft((previous) => ({
-                    ...previous,
-                    [key]: value,
-                  }));
-                  setError('');
-                }}
-                keyboardType={
-                  key === 'email'
-                    ? 'email-address'
-                    : key === 'phone'
-                      ? 'phone-pad'
-                      : 'default'
-                }
-                autoCapitalize={
-                  key === 'email' ? 'none' : 'words'
-                }
-                autoCorrect={
-                  key !== 'email' && key !== 'phone'
-                }
-                selectionColor={BrandColors.navy}
-                underlineColorAndroid="transparent"
-                style={[
-                  styles.input,
-                  isEditing && styles.editableInput,
-                ]}
-              />
-            </View>
-          ))}
-
-          {pendingProfile && (
-            <View style={styles.reviewCard}>
-              <ThemedText
-                type="smallBold"
-                style={styles.label}
-                accessibilityLiveRegion="polite"
-              >
-                Pending Review — Preview
-              </ThemedText>
-
-              <ThemedText style={styles.informationText}>
-                Your approved profile above is unchanged.
-                The following changes are awaiting review
-                in this preview.
-              </ThemedText>
-
-              {fields
-                .filter(
-                  ({ key }) =>
-                    pendingProfile[key] !== profile[key]
-                )
-                .map(({ key, label }) => (
+                {!!error && (
                   <View
-                    key={key}
-                    style={styles.requestedField}
+                    accessibilityRole="alert"
+                    accessibilityLiveRegion="polite"
+                    style={styles.message}
                   >
-                    <ThemedText
-                      type="smallBold"
-                      style={styles.label}
-                    >
-                      {label}
-                    </ThemedText>
-
-                    <ThemedText style={styles.requestedText}>
-                      Current: {profile[key]}
-                    </ThemedText>
-
-                    <ThemedText style={styles.requestedText}>
-                      Requested: {pendingProfile[key]}
-                    </ThemedText>
+                    <MaterialIcons name="error-outline" size={20} color={BrandColors.navy} />
+                    <ThemedText style={[styles.body, styles.flex]}>{error}</ThemedText>
                   </View>
-                ))}
-            </View>
-          )}
+                )}
+                {!!notice && (
+                  <View accessibilityLiveRegion="polite" style={styles.message}>
+                    <MaterialIcons name="check-circle-outline" size={20} color={BrandColors.navy} />
+                    <ThemedText style={[styles.body, styles.flex]}>{notice}</ThemedText>
+                  </View>
+                )}
 
-          {!!error && (
-            <ThemedText
-              accessibilityRole="alert"
-              style={styles.error}
-            >
-              {error}
-            </ThemedText>
-          )}
-
-          {!!notice && (
-            <ThemedText
-              accessibilityLiveRegion="polite"
-              style={styles.notice}
-            >
-              {notice}
-            </ThemedText>
-          )}
-
-          <View style={styles.actions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{
-                disabled: hasPendingRequest,
-              }}
-              disabled={hasPendingRequest}
-              onPress={
-                isEditing
-                  ? submitProfileRequest
-                  : startEditing
-              }
-              style={({ pressed }) => [
-                styles.button,
-                styles.primaryButton,
-                hasPendingRequest && styles.disabledButton,
-                pressed &&
-                  !hasPendingRequest &&
-                  styles.pressed,
-              ]}
-            >
-              <ThemedText
-                type="smallBold"
-                style={styles.whiteText}
-              >
-                {hasPendingRequest
-                  ? 'Pending Review'
-                  : isEditing
-                    ? 'Submit for Review'
-                    : 'Request Profile Change'}
-              </ThemedText>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={
-                isEditing
-                  ? cancelEditing
-                  : openLogoutConfirmation
-              }
-              style={({ pressed }) => [
-                styles.button,
-                styles.outlineButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <ThemedText
-                type="smallBold"
-                style={styles.redText}
-              >
-                {isEditing ? 'Cancel' : 'Log Out'}
-              </ThemedText>
-            </Pressable>
+                {hasLoaded ? (
+                  <View style={styles.actions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: isSaving, busy: isSaving }}
+                      disabled={isSaving}
+                      onPress={isEditing ? submitProfileRequest : startEditing}
+                      style={({ pressed }) => [
+                        styles.button,
+                        styles.primaryButton,
+                        (pressed || isSaving) && styles.pressed,
+                      ]}
+                    >
+                      {isSaving ? (
+                        <ActivityIndicator color={BrandColors.white} size="small" />
+                      ) : (
+                        <MaterialIcons
+                          name={isEditing ? 'check' : 'edit'}
+                          size={20}
+                          color={BrandColors.white}
+                        />
+                      )}
+                      <ThemedText style={styles.primaryButtonText}>
+                        {isSaving ? 'Saving…' : isEditing ? 'Save changes' : 'Edit profile'}
+                      </ThemedText>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: isSaving }}
+                      disabled={isSaving}
+                      onPress={isEditing ? cancelEditing : openLogoutConfirmation}
+                      style={({ pressed }) => [
+                        styles.button,
+                        styles.secondaryButton,
+                        (pressed || isSaving) && styles.pressed,
+                      ]}
+                    >
+                      {!isEditing && (
+                        <MaterialIcons name="logout" size={20} color={BrandColors.navy} />
+                      )}
+                      <ThemedText style={styles.secondaryButtonText}>
+                        {isEditing ? 'Cancel' : 'Log out'}
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setReloadVersion((version) => version + 1)}
+                    style={({ pressed }) => [
+                      styles.button,
+                      styles.primaryButton,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <ThemedText style={styles.primaryButtonText}>Try again</ThemedText>
+                  </Pressable>
+                )}
+              </>
+            )}
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={showLogout}
@@ -406,54 +532,37 @@ export default function ProfileScreen() {
         onRequestClose={() => setShowLogout(false)}
       >
         <View style={styles.modalOverlay}>
-          <View
-            style={styles.modalCard}
-            accessibilityViewIsModal
-          >
-            <ThemedText
-              type="smallBold"
-              style={styles.label}
-            >
-              Log Out
-            </ThemedText>
-
-            <ThemedText style={styles.modalMessage}>
-              Are you sure you want to log out?
-            </ThemedText>
-
-            <View style={styles.confirmActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setShowLogout(false)}
-                style={({ pressed }) => [
-                  styles.confirmButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <ThemedText
-                  type="smallBold"
-                  style={styles.label}
-                >
-                  Cancel
-                </ThemedText>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={logout}
-                style={({ pressed }) => [
-                  styles.confirmButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <ThemedText
-                  type="smallBold"
-                  style={styles.redText}
-                >
-                  Log Out
-                </ThemedText>
-              </Pressable>
+          <View style={styles.modalCard} accessibilityViewIsModal>
+            <View style={styles.modalIcon}>
+              <MaterialIcons name="logout" size={28} color={BrandColors.navy} />
             </View>
+            <ThemedText accessibilityRole="header" style={styles.sectionTitle}>
+              Log out of GoodRun?
+            </ThemedText>
+            <ThemedText style={styles.body}>You can log back in whenever you’re ready.</ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              onPress={logout}
+              style={({ pressed }) => [
+                styles.button,
+                styles.primaryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <ThemedText style={styles.primaryButtonText}>Log out</ThemedText>
+            </Pressable>
+            <Pressable
+              disabled={isSaving}
+              accessibilityRole="button"
+              onPress={() => setShowLogout(false)}
+              style={({ pressed }) => [
+                styles.button,
+                styles.secondaryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <ThemedText style={styles.secondaryButtonText}>Stay logged in</ThemedText>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -462,280 +571,138 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BrandColors.navy,
-  },
-
-  scrollContent: {
-    flexGrow: 1,
-    backgroundColor: BrandColors.white,
-  },
-
-  header: {
-    backgroundColor: BrandColors.navy,
-    paddingBottom: Spacing.xl,
-  },
-
-  headerRow: {
-    width: '100%',
-    maxWidth: 520,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
+  container: { flex: 1, backgroundColor: BrandColors.white },
+  scrollContent: { flexGrow: 1 },
+  content: { width: '100%', maxWidth: 520, alignSelf: 'center', gap: Spacing.lg },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   iconButton: {
     width: 44,
     height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: '#F5F5F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: BrandColors.white,
-    transform: [{ rotate: '45deg' }],
-  },
-
-  identity: {
-    alignItems: 'center',
-    paddingTop: Spacing.lg,
-  },
-
-  avatarContainer: {
-    width: 104,
-    height: 104,
-    marginBottom: Spacing.md,
-  },
-
+  pageTitle: { ...Typography.displayMd, color: BrandColors.navy, flexShrink: 1 },
+  identity: { alignItems: 'center', gap: Spacing.xs, paddingVertical: Spacing.md },
   avatar: {
-    width: 96,
-    height: 96,
+    width: 88,
+    height: 88,
     borderRadius: Radius.full,
-    borderWidth: 3,
-    borderColor: BrandColors.white,
-    backgroundColor: BrandColors.white,
+    backgroundColor: '#EEEFF5',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.xs,
   },
-
-  initials: {
-    fontFamily: FontFamily.bold,
-    fontSize: 30,
-    lineHeight: 42,
-    color: BrandColors.navy,
-  },
-
-  cameraButton: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    backgroundColor: BrandColors.white,
-    borderWidth: 3,
-    borderColor: BrandColors.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  cameraBody: {
-    width: 19,
-    height: 14,
-    borderWidth: 2,
-    borderColor: BrandColors.navy,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  cameraTop: {
-    position: 'absolute',
-    top: -5,
-    width: 9,
-    height: 4,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
-    backgroundColor: BrandColors.navy,
-  },
-
-  cameraLens: {
-    width: 7,
-    height: 7,
-    borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderColor: BrandColors.navy,
-  },
-
-  name: {
-    color: BrandColors.white,
-    textAlign: 'center',
-  },
-
-  subtitle: {
-    color: BrandColors.white,
-    opacity: 0.7,
-    textAlign: 'center',
-    marginTop: Spacing.xxs,
-  },
-
-  form: {
-    width: '100%',
-    maxWidth: 568,
-    alignSelf: 'center',
-    paddingTop: Spacing.lg,
-  },
-
+  initials: { ...Typography.displayXl, color: BrandColors.navy },
+  name: { ...Typography.displayLg, color: BrandColors.navy, textAlign: 'center' },
+  body: { ...Typography.bodyMd, color: '#4A4A4A' },
+  label: { ...Typography.bodyMdStrong, color: BrandColors.navy },
+  hint: { ...Typography.bodySm, color: '#60646C', marginTop: Spacing.xxs },
+  flex: { flex: 1 },
   informationCard: {
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: BrandColors.navy,
-    borderRadius: Radius.lg,
-    backgroundColor: BrandColors.white,
-  },
-
-  informationText: {
-    color: BrandColors.navy,
-    marginTop: Spacing.xs,
-  },
-
-  previewText: {
-    color: BrandColors.navy,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: Spacing.sm,
-  },
-
-  field: {
-    marginBottom: Spacing.md,
-  },
-
-  label: {
-    color: BrandColors.navy,
-  },
-
-  input: {
-    minHeight: 44,
-    borderWidth: 1.5,
-    borderColor: BrandColors.navy,
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    marginTop: Spacing.xxs,
-    fontFamily: FontFamily.regular,
-    fontSize: 15,
-    color: BrandColors.navy,
-    backgroundColor: BrandColors.white,
-  },
-
-  editableInput: {
-    borderColor: BrandColors.red,
-  },
-
-  reviewCard: {
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: BrandColors.navy,
-    borderRadius: Radius.lg,
-    backgroundColor: BrandColors.white,
-  },
-
-  requestedField: {
-    marginTop: Spacing.md,
-  },
-
-  requestedText: {
-    color: BrandColors.navy,
-    marginTop: Spacing.xxs,
-  },
-
-  actions: {
+    flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: '#F5F5F7',
+    alignItems: 'flex-start',
   },
-
+  detailsCard: {
+    borderWidth: 1,
+    borderColor: '#E8E8EA',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+  },
+  sectionTitle: { ...Typography.displaySm, color: BrandColors.navy, paddingVertical: Spacing.md },
+  field: { paddingVertical: Spacing.md, gap: Spacing.xs },
+  fieldDivider: { borderTopWidth: 1, borderTopColor: '#E8E8EA' },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, flexWrap: 'wrap' },
+  fieldLabel: { ...Typography.bodySm, color: '#60646C' },
+  value: { ...Typography.bodyMd, color: BrandColors.navy, flexShrink: 1 },
+  input: {
+    ...Typography.bodyMd,
+    minHeight: 52,
+    color: BrandColors.navy,
+    borderWidth: 1,
+    borderColor: BrandColors.navy,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  sizeOptions: { gap: Spacing.xs },
+  sizeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    minHeight: 64,
+    borderWidth: 1,
+    borderColor: '#D5D7DF',
+    borderRadius: Radius.md,
+  },
+  selectedSizeOption: { borderColor: BrandColors.navy, backgroundColor: '#F5F5F7' },
+  actions: { gap: Spacing.sm },
   button: {
-    minHeight: 48,
-    borderRadius: Radius.full,
+    minHeight: 52,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.sm,
-  },
-
-  primaryButton: {
-    backgroundColor: BrandColors.red,
-  },
-
-  outlineButton: {
-    borderWidth: 1.5,
-    borderColor: BrandColors.red,
-  },
-
-  whiteText: {
-    color: BrandColors.white,
-  },
-
-  redText: {
-    color: BrandColors.red,
-  },
-
-  disabledButton: {
-    opacity: 0.5,
-  },
-
-  pressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.96 }],
-  },
-
-  error: {
-    color: BrandColors.red,
-    marginBottom: Spacing.xs,
-  },
-
-  notice: {
-    color: BrandColors.navy,
-    marginBottom: Spacing.xs,
-  },
-
-  confirmActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Spacing.md,
+    gap: Spacing.xs,
   },
-
-  confirmButton: {
-    minHeight: 44,
-    padding: Spacing.sm,
-    justifyContent: 'center',
+  primaryButton: { backgroundColor: BrandColors.red },
+  secondaryButton: {
+    backgroundColor: BrandColors.white,
+    borderWidth: 1,
+    borderColor: BrandColors.navy,
   },
-
+  primaryButtonText: {
+    ...Typography.buttonMd,
+    color: BrandColors.white,
+    flexShrink: 1,
+    textAlign: 'center',
+  },
+  secondaryButtonText: {
+    ...Typography.buttonMd,
+    color: BrandColors.navy,
+    flexShrink: 1,
+    textAlign: 'center',
+  },
+  pressed: { opacity: 0.65 },
+  message: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.xs,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    backgroundColor: '#F5F5F7',
+  },
+  loading: { minHeight: 240, justifyContent: 'center', alignItems: 'center', gap: Spacing.md },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.lg,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(20,26,67,0.45)',
   },
-
   modalCard: {
     width: '100%',
     maxWidth: 360,
+    maxHeight: '90%',
     padding: Spacing.lg,
     borderRadius: Radius.xl,
     backgroundColor: BrandColors.white,
+    gap: Spacing.sm,
   },
-
-  modalMessage: {
-    color: BrandColors.navy,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.md,
+  modalIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.full,
+    backgroundColor: '#F5F5F7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
