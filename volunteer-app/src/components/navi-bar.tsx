@@ -46,7 +46,7 @@ export default function NavigationBar({}: NavigationBarProps) {
     }
 
     if (item.label === 'Support') {
-      setNotice('Support is coming soon.');
+      router.push('/ticket');
     }
   }
 

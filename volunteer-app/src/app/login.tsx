@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { AuthButton, AuthError, AuthField, AuthScreen, authStyles } from '@/components/auth-form';
@@ -84,7 +84,22 @@ export default function LoginScreen() {
   }
 
   return (
-    <AuthScreen title="Welcome back" subtitle="Log in to continue your GoodRun journey.">
+    <AuthScreen 
+        title="Welcome back" 
+        subtitle="Log in to continue your GoodRun journey."header={
+        <Image
+        source={require('../assets/medical-pantry-logo-white.png')}
+        accessibilityLabel="Medical Pantry"
+        style={{
+            width: '100%',
+            maxWidth: 260,
+            height: 54,
+            resizeMode: 'contain',
+            alignSelf: 'center',
+            marginBottom: 24,
+        }}
+        />
+    }>
       <AuthField
         label="Email address"
         placeholder="you@example.com"
