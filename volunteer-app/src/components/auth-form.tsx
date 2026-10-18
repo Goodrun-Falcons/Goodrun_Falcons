@@ -45,12 +45,14 @@ export function AuthScreen({
   title,
   subtitle,
   children,
+  header,
   onBack,
   backDisabled = false,
 }: {
   title: string;
   subtitle: string;
   children: ReactNode;
+  header?: ReactNode;
   onBack?: () => void;
   backDisabled?: boolean;
 }) {
@@ -81,11 +83,7 @@ export function AuthScreen({
                 </View>
               </Pressable>
             )}
-            <Image
-              source={require('../assets/medical-pantry-logo-white.png')}
-              style={styles.logo}
-              accessibilityLabel="Medical Pantry"
-            />
+            {header}
             <View style={styles.heading}>
               <Text accessibilityRole="header" style={authStyles.title}>
                 {title}
@@ -211,14 +209,6 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xl },
   content: { width: '100%', maxWidth: 440, alignSelf: 'center', flexGrow: 1 },
   backRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  logo: {
-    width: '100%',
-    maxWidth: 260,
-    height: 54,
-    resizeMode: 'contain',
-    alignSelf: 'center',
-    marginBottom: Spacing.xl,
-  },
   heading: { gap: Spacing.xs, marginBottom: Spacing.xl },
   form: { gap: Spacing.lg },
   footer: {
