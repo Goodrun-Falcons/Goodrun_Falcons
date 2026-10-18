@@ -4,18 +4,27 @@ import WebView from 'react-native-webview';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, Typography } from '@/constants/theme';
+import { useMapScripts } from '@/hooks/use-map-scripts';
 import { buildInteractiveMapHtml, MapMarker } from '@/lib/interactive-map-html';
+import { setUserLocationCall } from '@/lib/map-user-location';
+import { Coordinates } from '@/types/task';
 
 export function InteractiveMap({
   markers,
+  userLocation,
   style,
   onMarkerPress,
 }: {
   markers: MapMarker[];
+  /** Drawn as a blue dot. Updated in place, so it doesn't reload the map. */
+  userLocation?: Coordinates | null;
   style?: StyleProp<ViewStyle>;
   onMarkerPress?: (id: string) => void;
 }) {
   const html = buildInteractiveMapHtml(markers);
+  const { webViewRef, onLoadStart, onReady } = useMapScripts({
+    userLocation: setUserLocationCall(userLocation),
+  });
 
   if (!html) {
     return (
@@ -34,6 +43,7 @@ export function InteractiveMap({
 
   return (
     <WebView
+      ref={webViewRef}
       source={{ html }}
       style={style}
       originWhitelist={['*']}
@@ -42,12 +52,14 @@ export function InteractiveMap({
       scrollEnabled={false}
       bounces={false}
       overScrollMode="never"
+      onLoadStart={onLoadStart}
       onMessage={(event) => {
-        if (!onMarkerPress) return;
         try {
           const message = JSON.parse(event.nativeEvent.data);
-          if (message?.type === 'markerPress' && typeof message.id === 'string') {
-            onMarkerPress(message.id);
+          if (message?.type === 'ready') {
+            onReady();
+          } else if (message?.type === 'markerPress' && typeof message.id === 'string') {
+            onMarkerPress?.(message.id);
           }
         } catch {
           // Ignore malformed messages from the WebView.

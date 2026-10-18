@@ -1,5 +1,6 @@
 import { BrandColors } from '@/constants/theme';
 import { computeMapCamera } from '@/lib/map-camera';
+import { READY_SCRIPT, USER_LOCATION_CSS, userLocationScript } from '@/lib/map-user-location';
 import { Coordinates } from '@/types/task';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
@@ -15,6 +16,9 @@ export type RouteMarker = {
   status: RouteMarkerStatus;
 };
 
+// Resting height of the My Route bottom sheet (SHEET_DEFAULT_RATIO in my-route.tsx).
+const SHEET_RATIO = 0.52;
+
 const STATUS_COLOR: Record<RouteMarkerStatus, string> = {
   pending: BrandColors.navy,
   active: BrandColors.red,
@@ -25,6 +29,11 @@ const STATUS_COLOR: Record<RouteMarkerStatus, string> = {
  * Builds a self-contained HTML page (mapbox-gl.js from the CDN, same approach as
  * interactive-map-html.ts) showing a route line between numbered stops. `dashed`
  * mirrors the trip's active/inactive state, matching the Figma reference.
+ *
+ * The line starts out straight between the stops. Once the road route is known the
+ * native side swaps it in with `window.setRoute([[lng, lat], ...])`, and moves the
+ * user's dot with `window.setUserLocation` (see map-user-location.ts) — both without
+ * reloading the page.
  */
 export function buildRouteMapHtml(markers: RouteMarker[], dashed: boolean): string | null {
   if (!MAPBOX_TOKEN) return null;
@@ -33,7 +42,7 @@ export function buildRouteMapHtml(markers: RouteMarker[], dashed: boolean): stri
   // height; bias a bit past that so markers clear the sheet's rounded top edge.
   const { center, zoom } = computeMapCamera(
     markers.map((m) => m.coords),
-    0.62
+    SHEET_RATIO + 0.1
   );
   const markersJson = JSON.stringify(markers).replace(/</g, '\\u003c');
   const lineCoordsJson = JSON.stringify(markers.map((m) => [m.coords.lng, m.coords.lat]));
@@ -55,7 +64,7 @@ export function buildRouteMapHtml(markers: RouteMarker[], dashed: boolean): stri
         color: #ffffff; font-family: -apple-system, sans-serif; font-weight: 700; font-size: 12px;
         border: 2px solid rgba(255,255,255,0.9);
         box-shadow: 0 1px 4px rgba(0,0,0,0.45);
-      }
+      }${USER_LOCATION_CSS}
     </style>
   </head>
   <body>
@@ -70,12 +79,23 @@ export function buildRouteMapHtml(markers: RouteMarker[], dashed: boolean): stri
         attributionControl: false,
       });
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+${userLocationScript(SHEET_RATIO)}
+
+      const lineFeature = (coordinates) => ({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates },
+      });
+      // May be replaced before 'load' fires, so the source starts from whatever is latest.
+      let routeCoords = ${lineCoordsJson};
+      let routeSourceAdded = false;
+      window.setRoute = (coordinates) => {
+        routeCoords = coordinates;
+        if (routeSourceAdded) map.getSource('route').setData(lineFeature(routeCoords));
+      };
 
       map.on('load', () => {
-        map.addSource('route', {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'LineString', coordinates: ${lineCoordsJson} } },
-        });
+        map.addSource('route', { type: 'geojson', data: lineFeature(routeCoords) });
+        routeSourceAdded = true;
         map.addLayer({
           id: 'route-line',
           type: 'line',
@@ -108,6 +128,7 @@ export function buildRouteMapHtml(markers: RouteMarker[], dashed: boolean): stri
       // fitBounds(), since fitBounds computes its camera from the canvas's
       // current pixel size and doesn't get corrected by a later resize().
       new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
+${READY_SCRIPT}
     </script>
   </body>
 </html>`;

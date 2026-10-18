@@ -16,7 +16,7 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
-import { mockTasks } from '@/data/mock-tasks';
+import { useTasks } from '@/context/tasks-context';
 import { useTheme } from '@/hooks/use-theme';
 
 // Placeholder until Story 1-4 (auth/profile) supplies the real signed-in volunteer.
@@ -28,10 +28,8 @@ const IMPACT_STATS = [
   { label: 'Orgs helped', value: '9' },
 ];
 
-const RECENT_ACTIVITY = [
-  { id: 'act-1', desc: 'Surgical gloves → Riverbank Aged Care', date: 'Yesterday' },
-  { id: 'act-2', desc: 'Wound dressing kits → Hope Street Pharmacy', date: 'Mon 24 Aug' },
-];
+// Keeps Home short; the rest are a tap away on Nearby via "See all".
+const MAX_URGENT_CARDS = 5;
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -44,9 +42,16 @@ export default function HomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-
-  const urgentTasks = mockTasks.filter((task) => task.urgency === 'urgent');
-  const nearestDistance = Math.min(...mockTasks.map((task) => task.distanceKm));
+  const tasks = useTasks();
+  const urgentTasks = tasks.filter((task) => task.urgency === 'urgent');
+  // Nearest first. Runs without a distance yet sort last rather than first.
+  const urgentCards = [...urgentTasks]
+    .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
+    .slice(0, MAX_URGENT_CARDS);
+  const distances = tasks.flatMap((task) =>
+    task.distanceKm === undefined ? [] : [task.distanceKm]
+  );
+  const nearestDistance = distances.length > 0 ? Math.min(...distances) : null;
 
   return (
     <ThemedView type="canvasSoft" style={styles.screen}>
@@ -105,10 +110,11 @@ export default function HomeScreen() {
                 Available this week
               </ThemedText>
               <ThemedText style={styles.heroTitle} themeColor="primaryText">
-                {mockTasks.length} runs near you
+                {tasks.length} runs near you
               </ThemedText>
               <ThemedText style={styles.heroSubtitle} themeColor="primaryText">
-                {urgentTasks.length} urgent · from {nearestDistance.toFixed(1)} km away
+                {urgentTasks.length} urgent
+                {nearestDistance === null ? '' : ` · from ${nearestDistance.toFixed(1)} km away`}
               </ThemedText>
               <View style={styles.heroPill}>
                 <ThemedText style={styles.heroPillLabel} themeColor="primaryText">
@@ -159,49 +165,20 @@ export default function HomeScreen() {
               </ThemedText>
             ) : (
               <View style={styles.cardGroup}>
-                {urgentTasks.map((task) => (
-                  <TaskCard key={task.id} task={task} />
+                {urgentCards.map((task) => (
+                  <Pressable
+                    key={task.id}
+                    accessibilityRole="button"
+                    onPress={() =>
+                      router.push({ pathname: '/nearby', params: { highlight: task.id } })
+                    }
+                    style={({ pressed }) => pressed && styles.cardPressed}
+                  >
+                    <TaskCard task={task} />
+                  </Pressable>
                 ))}
               </View>
             )}
-          </View>
-
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionHeading} themeColor="ink">
-              Recent activity
-            </ThemedText>
-            <ThemedView type="canvas" style={[styles.activityCard, Elevation.level1]}>
-              {RECENT_ACTIVITY.map((activity, i) => (
-                <View
-                  key={activity.id}
-                  style={[
-                    styles.activityRow,
-                    i > 0 && { borderTopWidth: 1, borderTopColor: theme.surfacePressed },
-                  ]}
-                >
-                  <View style={[styles.activityIcon, { backgroundColor: theme.canvasSoft }]}>
-                    <SymbolView
-                      name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-                      tintColor={theme.secondary}
-                      size={14}
-                    />
-                  </View>
-                  <View style={styles.activityTextGroup}>
-                    <ThemedText style={styles.activityDesc} themeColor="ink" numberOfLines={1}>
-                      {activity.desc}
-                    </ThemedText>
-                    <ThemedText style={styles.activityDate} themeColor="mute">
-                      {activity.date}
-                    </ThemedText>
-                  </View>
-                  <View style={[styles.doneBadge, { backgroundColor: theme.canvasSoft }]}>
-                    <ThemedText style={styles.doneBadgeLabel} themeColor="secondary">
-                      Done
-                    </ThemedText>
-                  </View>
-                </View>
-              ))}
-            </ThemedView>
           </View>
         </View>
       </ScrollView>
@@ -351,47 +328,12 @@ const styles = StyleSheet.create({
   cardGroup: {
     gap: Spacing.md,
   },
+  cardPressed: {
+    opacity: 0.85,
+  },
   emptyState: {
     ...Typography.bodyMd,
     textAlign: 'center',
     paddingVertical: Spacing.lg,
-  },
-  activityCard: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  activityIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activityTextGroup: {
-    flex: 1,
-  },
-  activityDesc: {
-    ...Typography.bodySm,
-    fontFamily: Typography.bodyMdStrong.fontFamily,
-  },
-  activityDate: {
-    ...Typography.caption,
-    marginTop: 2,
-  },
-  doneBadge: {
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 2,
-  },
-  doneBadgeLabel: {
-    ...Typography.caption,
-    fontFamily: Typography.bodyMdStrong.fontFamily,
   },
 });

@@ -1,9 +1,14 @@
 import { computeMapCamera } from '@/lib/map-camera';
+import { READY_SCRIPT, USER_LOCATION_CSS, userLocationScript } from '@/lib/map-user-location';
 import { Coordinates } from '@/types/task';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 const MAPBOX_GL_VERSION = '3.9.0';
 const MAPBOX_STYLE = 'mapbox://styles/mapbox/dark-v11';
+
+// The draggable bottom sheet on the Nearby screen rests at ~46% of the map
+// area's height by default (see SHEET_DEFAULT_RATIO in nearby.tsx).
+const SHEET_RATIO = 0.46;
 
 export type MapMarker = Coordinates & { color: string; id?: string };
 
@@ -13,13 +18,13 @@ export type MapMarker = Coordinates & { color: string; id?: string };
  * a WebView, since we don't ship a native Mapbox SDK (no Expo Go dev-client
  * rebuild required). Returns null when no token is configured, so callers
  * can show a fallback instead of a broken map.
+ *
+ * The user's own position is pushed in separately (see map-user-location.ts).
  */
 export function buildInteractiveMapHtml(markers: MapMarker[]): string | null {
   if (!MAPBOX_TOKEN) return null;
 
-  // The draggable bottom sheet on the Nearby screen rests at ~46% of the map
-  // area's height by default (see SHEET_DEFAULT_RATIO in nearby.tsx).
-  const { center, zoom } = computeMapCamera(markers, 0.46);
+  const { center, zoom } = computeMapCamera(markers, SHEET_RATIO);
   const markersJson = JSON.stringify(markers).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
@@ -32,7 +37,7 @@ export function buildInteractiveMapHtml(markers: MapMarker[]): string | null {
     <style>
       html, body { margin: 0; padding: 0; background: #141a43; }
       #map { position: fixed; inset: 0; }
-      .mapboxgl-ctrl-logo { opacity: 0.6; }
+      .mapboxgl-ctrl-logo { opacity: 0.6; }${USER_LOCATION_CSS}
     </style>
   </head>
   <body>
@@ -47,6 +52,7 @@ export function buildInteractiveMapHtml(markers: MapMarker[]): string | null {
         attributionControl: false,
       });
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+${userLocationScript(SHEET_RATIO)}
 
       map.on('load', () => {
         const markers = ${markersJson};
@@ -79,6 +85,7 @@ export function buildInteractiveMapHtml(markers: MapMarker[]): string | null {
       // fitBounds(), since fitBounds computes its camera from the canvas's
       // current pixel size and doesn't get corrected by a later resize().
       new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
+${READY_SCRIPT}
     </script>
   </body>
 </html>`;

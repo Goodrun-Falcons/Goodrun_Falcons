@@ -6,6 +6,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Elevation, Radius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDueBy } from '@/lib/date';
+import { teamLabel } from '@/lib/teams';
 import { Task, TaskUrgency } from '@/types/task';
 
 const URGENCY_LABEL: Record<TaskUrgency, string> = {
@@ -19,13 +20,22 @@ type TaskCardProps = {
   /** Omit to render the card without an accept action (e.g. the Home summary list). */
   onAccept?: () => void;
   accepted?: boolean;
+  /** Shown on a disabled button instead of "Accept run", e.g. when the trip is full. */
+  acceptBlockedReason?: string;
   /** True while this card is the target of a just-tapped map pin. */
   highlighted?: boolean;
 };
 
-export function TaskCard({ task, onAccept, accepted, highlighted }: TaskCardProps) {
+export function TaskCard({
+  task,
+  onAccept,
+  accepted,
+  acceptBlockedReason,
+  highlighted,
+}: TaskCardProps) {
   const theme = useTheme();
   const isUrgent = task.urgency === 'urgent';
+  const blocked = !accepted && acceptBlockedReason !== undefined;
 
   return (
     <ThemedView
@@ -34,7 +44,7 @@ export function TaskCard({ task, onAccept, accepted, highlighted }: TaskCardProp
     >
       <View style={styles.headerRow}>
         <ThemedText style={styles.typeLabel} themeColor="ink">
-          {task.type === 'pickup' ? 'Pickup' : 'Delivery'}
+          {task.itemType}
         </ThemedText>
         <View style={styles.urgencyRow}>
           {isUrgent && <View style={[styles.urgencyDot, { backgroundColor: theme.primary }]} />}
@@ -53,6 +63,11 @@ export function TaskCard({ task, onAccept, accepted, highlighted }: TaskCardProp
       <ThemedText style={styles.itemSummary} themeColor="body">
         {task.itemSummary}
       </ThemedText>
+      <View style={[styles.teamTag, { backgroundColor: theme.canvasSoft }]}>
+        <ThemedText style={styles.teamTagLabel} themeColor="ink">
+          {teamLabel(task.team)}
+        </ThemedText>
+      </View>
 
       <View style={styles.routeSection}>
         <View style={styles.routeRow}>
@@ -65,58 +80,64 @@ export function TaskCard({ task, onAccept, accepted, highlighted }: TaskCardProp
         <View style={styles.routeRow}>
           <View style={[styles.routeDot, styles.routeDotOutline, { borderColor: theme.ink }]} />
           <ThemedText style={styles.routeText} themeColor="ink" numberOfLines={1}>
-            {task.deliveryAddress}
+            {task.dropoffAddress}
           </ThemedText>
         </View>
       </View>
 
       <View style={styles.metaRow}>
-        <View style={styles.metaItem}>
-          <SymbolView
-            name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
-            tintColor={theme.mute}
-            size={14}
-          />
-          <ThemedText style={styles.metaText} themeColor="mute">
-            {task.distanceKm.toFixed(1)} km away
-          </ThemedText>
-        </View>
-        <View style={styles.metaItem}>
-          <SymbolView
-            name={{ ios: 'car.fill', android: 'directions_car', web: 'directions_car' }}
-            tintColor={theme.mute}
-            size={14}
-          />
-          <ThemedText style={styles.metaText} themeColor="mute">
-            ~{task.etaMinutes} min drive
-          </ThemedText>
-        </View>
-        <View style={styles.metaItem}>
-          <SymbolView
-            name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
-            tintColor={theme.mute}
-            size={14}
-          />
-          <ThemedText style={styles.metaText} themeColor="mute">
-            {formatDueBy(task.dueBy)}
-          </ThemedText>
-        </View>
+        {task.distanceKm !== undefined && (
+          <View style={styles.metaItem}>
+            <SymbolView
+              name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
+              tintColor={theme.mute}
+              size={14}
+            />
+            <ThemedText style={styles.metaText} themeColor="mute">
+              {task.distanceKm.toFixed(1)} km away
+            </ThemedText>
+          </View>
+        )}
+        {task.minutesToPickup !== undefined && (
+          <View style={styles.metaItem}>
+            <SymbolView
+              name={{ ios: 'car.fill', android: 'directions_car', web: 'directions_car' }}
+              tintColor={theme.mute}
+              size={14}
+            />
+            <ThemedText style={styles.metaText} themeColor="mute">
+              ~{task.minutesToPickup} min drive
+            </ThemedText>
+          </View>
+        )}
+        {task.dueBy !== undefined && (
+          <View style={styles.metaItem}>
+            <SymbolView
+              name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
+              tintColor={theme.mute}
+              size={14}
+            />
+            <ThemedText style={styles.metaText} themeColor="mute">
+              {formatDueBy(task.dueBy)}
+            </ThemedText>
+          </View>
+        )}
       </View>
 
       {onAccept && (
         <Pressable
           onPress={onAccept}
-          disabled={accepted}
+          disabled={accepted || blocked}
           style={[
             styles.acceptButton,
-            { backgroundColor: accepted ? theme.canvasSoft : theme.primary },
+            { backgroundColor: accepted || blocked ? theme.canvasSoft : theme.primary },
           ]}
         >
           <ThemedText
             style={styles.acceptButtonLabel}
-            themeColor={accepted ? 'mute' : 'primaryText'}
+            themeColor={accepted || blocked ? 'mute' : 'primaryText'}
           >
-            {accepted ? 'Added to My Route' : 'Accept run'}
+            {accepted ? 'Added to My Route' : (acceptBlockedReason ?? 'Accept run')}
           </ThemedText>
         </Pressable>
       )}
@@ -125,6 +146,17 @@ export function TaskCard({ task, onAccept, accepted, highlighted }: TaskCardProp
 }
 
 const styles = StyleSheet.create({
+  teamTag: {
+    alignSelf: 'flex-start',
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+    marginTop: Spacing.xs,
+  },
+  teamTagLabel: {
+    ...Typography.caption,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
+  },
   card: {
     borderRadius: Radius.lg,
     padding: Spacing.md,

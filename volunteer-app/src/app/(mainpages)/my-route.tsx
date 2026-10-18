@@ -1,10 +1,14 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import ReorderableList, {
+  ReorderableListReorderEvent,
+  useReorderableDrag,
+} from 'react-native-reorderable-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteMap } from '@/components/route-map';
@@ -18,14 +22,22 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useLocation } from '@/context/location-context';
 import { useTrip } from '@/context/trip-context';
+import { useDrivingRoute } from '@/hooks/use-driving-route';
 import { useTheme } from '@/hooks/use-theme';
+import { openDirections } from '@/lib/directions';
+import { formatDistance, formatDuration } from '@/lib/route-format';
 import { RouteMarker, RouteMarkerStatus } from '@/lib/route-map-html';
+import { distanceKm } from '@/lib/stop-order';
 
 const SHEET_COLLAPSED_RATIO = 0.16;
 const SHEET_DEFAULT_RATIO = 0.52;
 const SHEET_EXPANDED_RATIO = 0.88;
 const FLING_VELOCITY_THRESHOLD = 500;
+// Close enough to count as "at the stop" — roughly a building plus its car park,
+// and comfortably more than a GPS fix's error.
+const ARRIVAL_RADIUS_KM = 0.075;
 
 function clamp(value: number, min: number, max: number) {
   'worklet';
@@ -39,21 +51,84 @@ function nearestSnapPoint(value: number, points: number[]) {
   );
 }
 
+// Must be rendered inside a list item, since useReorderableDrag reads the item's context.
+function DragHandle() {
+  const drag = useReorderableDrag();
+
+  return (
+    <Pressable onPressIn={drag} hitSlop={8} style={styles.dragHandle}>
+      <SymbolView
+        name={{ ios: 'line.3.horizontal', android: 'drag_handle', web: 'drag_handle' }}
+        tintColor={BrandColors.navy}
+        size={18}
+      />
+    </Pressable>
+  );
+}
+
 export default function MyRouteScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const { stops, removeStop, tripStatus, startTrip, endTrip } = useTrip();
+  const {
+    stops,
+    cancelTask,
+    tripStatus,
+    startTrip,
+    endTrip,
+    orderCustomised,
+    reorder,
+    resetToSuggestedOrder,
+  } = useTrip();
   // The sheet's snap points are a % of the map area, not the full window —
   // the docked header above the map shortens that area, so measure it directly
   // instead of assuming it's the whole screen.
   const [mapAreaHeight, setMapAreaHeight] = useState(windowHeight);
 
+  const { coords } = useLocation();
+
   const currentStopIndex = stops.findIndex((stop) => !stop.done);
+  const currentStop = currentStopIndex === -1 ? null : stops[currentStopIndex];
   const tripActive = tripStatus === 'active';
+
+  // Road route from the volunteer through every stop still to do. legs[0] is the hop to
+  // the next stop, but only when the route actually starts from the volunteer.
+  const route = useDrivingRoute(
+    coords,
+    stops.filter((stop) => !stop.done).map((stop) => stop.coords)
+  );
+  const nextLeg = coords ? route?.legs[0] : undefined;
+  const arrived =
+    tripActive &&
+    coords !== null &&
+    currentStop !== null &&
+    distanceKm(coords, currentStop.coords) <= ARRIVAL_RADIUS_KM;
+  let nextStopMessage: string | null = null;
+  if (tripActive && currentStop) {
+    if (arrived) {
+      nextStopMessage = `You're at ${currentStop.org} — confirm the ${currentStop.type} when it's done`;
+    } else if (nextLeg) {
+      nextStopMessage = `Next: ${currentStop.org} · ${formatDistance(nextLeg.distanceM)} · ${formatDuration(nextLeg.durationS)}`;
+    }
+  }
   // You can end the trip once nothing is left to do — once a stop is picked up it can't
   // be cancelled either, so "nothing left" always means every remaining stop is done.
   const allStopsDone = stops.every((stop) => stop.done);
+  // The order can only be changed before the trip starts.
+  const canReorder = tripStatus === 'ready' && stops.length > 1;
+  const [orderNotice, setOrderNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleReorder({ from, to }: ReorderableListReorderEvent) {
+    if (reorder(from, to)) {
+      setOrderNotice(null);
+      return;
+    }
+    // The list snaps back on its own; say why, since the rule isn't obvious.
+    setOrderNotice("A drop-off can't go before its pickup");
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setOrderNotice(null), 3000);
+  }
 
   const routeMarkers: RouteMarker[] = stops.map((stop, i) => {
     const status: RouteMarkerStatus = stop.done
@@ -122,8 +197,10 @@ export default function MyRouteScreen() {
                 {tripActive ? 'Trip in progress' : 'My Route'}
               </ThemedText>
               <ThemedText style={styles.statusSubtitle} themeColor="primaryText">
-                {pickupCount} pickup{pickupCount === 1 ? '' : 's'} · {dropoffCount} drop-off · ~22
-                min · 5.5 km
+                {pickupCount} pickup{pickupCount === 1 ? '' : 's'} · {dropoffCount} drop-off
+                {route
+                  ? ` · ${formatDuration(route.durationS)} · ${formatDistance(route.distanceM)}`
+                  : ''}
               </ThemedText>
             </View>
             <View
@@ -153,7 +230,13 @@ export default function MyRouteScreen() {
             sheetHeight.value = Math.round(height * SHEET_DEFAULT_RATIO);
           }}
         >
-          <RouteMap markers={routeMarkers} dashed={!tripActive} style={styles.mapImage} />
+          <RouteMap
+            markers={routeMarkers}
+            dashed={!tripActive}
+            routeGeometry={route?.geometry}
+            userLocation={coords}
+            style={styles.mapImage}
+          />
 
           <Animated.View style={[styles.sheet, Elevation.level2, animatedSheetStyle]}>
             <GestureDetector gesture={panGesture}>
@@ -171,9 +254,55 @@ export default function MyRouteScreen() {
               </ThemedText>
             </View>
 
-            <FlatList
+            {nextStopMessage && (
+              <View
+                style={[
+                  styles.nextStopBanner,
+                  arrived && { backgroundColor: 'rgba(26,138,90,0.1)' },
+                ]}
+              >
+                <SymbolView
+                  name={
+                    arrived
+                      ? {
+                          ios: 'checkmark.circle.fill',
+                          android: 'check_circle',
+                          web: 'check_circle',
+                        }
+                      : { ios: 'car.fill', android: 'directions_car', web: 'directions_car' }
+                  }
+                  tintColor={arrived ? '#1a8a5a' : BrandColors.navy}
+                  size={16}
+                />
+                <ThemedText style={styles.nextStopText} themeColor="ink" numberOfLines={2}>
+                  {nextStopMessage}
+                </ThemedText>
+              </View>
+            )}
+
+            {canReorder && (
+              <View style={styles.orderHintRow}>
+                <ThemedText style={styles.orderHint} themeColor={orderNotice ? 'primary' : 'mute'}>
+                  {orderNotice ??
+                    (orderCustomised
+                      ? 'Custom order'
+                      : 'Suggested order · hold the handle and drag to change it')}
+                </ThemedText>
+                {orderCustomised && (
+                  <Pressable onPress={resetToSuggestedOrder} hitSlop={8}>
+                    <ThemedText style={styles.orderHintAction} themeColor="primary">
+                      Reset to suggested
+                    </ThemedText>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            <ReorderableList
               style={styles.list}
               data={stops}
+              dragEnabled={canReorder}
+              onReorder={handleReorder}
               keyExtractor={(stop) => stop.id}
               contentContainerStyle={styles.listContent}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -223,9 +352,9 @@ export default function MyRouteScreen() {
                             {stop.type.toUpperCase()}
                           </ThemedText>
                         </View>
-                        {!stop.done && stop.id.startsWith('task-') && (
+                        {!stop.done && stop.type === 'pickup' && (
                           <Pressable
-                            onPress={() => removeStop(stop.id)}
+                            onPress={() => cancelTask(stop.taskId)}
                             hitSlop={8}
                             style={styles.cancelButton}
                           >
@@ -247,17 +376,37 @@ export default function MyRouteScreen() {
                         {stop.address}
                       </ThemedText>
                     </View>
+                    {canReorder && !stop.done && <DragHandle />}
                     {isCurrent && tripActive && (
-                      <Pressable
-                        onPress={() =>
-                          router.push({ pathname: '/handover', params: { stopId: stop.id } })
-                        }
-                        style={[styles.confirmButton, { backgroundColor: theme.primary }]}
-                      >
-                        <ThemedText style={styles.confirmButtonLabel} themeColor="primaryText">
-                          Confirm
-                        </ThemedText>
-                      </Pressable>
+                      <View style={styles.currentStopActions}>
+                        <Pressable
+                          onPress={() => openDirections(stop.coords)}
+                          style={[styles.navigateButton, { borderColor: theme.primary }]}
+                        >
+                          <SymbolView
+                            name={{
+                              ios: 'arrow.triangle.turn.up.right.diamond.fill',
+                              android: 'directions',
+                              web: 'directions',
+                            }}
+                            tintColor={theme.primary}
+                            size={14}
+                          />
+                          <ThemedText style={styles.confirmButtonLabel} themeColor="primary">
+                            Navigate
+                          </ThemedText>
+                        </Pressable>
+                        <Pressable
+                          onPress={() =>
+                            router.push({ pathname: '/handover', params: { stopId: stop.id } })
+                          }
+                          style={[styles.confirmButton, { backgroundColor: theme.primary }]}
+                        >
+                          <ThemedText style={styles.confirmButtonLabel} themeColor="primaryText">
+                            Confirm
+                          </ThemedText>
+                        </Pressable>
+                      </View>
                     )}
                   </View>
                 );
@@ -462,6 +611,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xxs,
   },
+  nextStopBanner: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    backgroundColor: 'rgba(20,26,67,0.06)',
+  },
+  nextStopText: {
+    ...Typography.bodySm,
+    flex: 1,
+  },
+  orderHintRow: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.xs,
+  },
+  orderHint: {
+    ...Typography.caption,
+  },
+  orderHintAction: {
+    ...Typography.caption,
+    fontFamily: Typography.bodyMdStrong.fontFamily,
+  },
+  dragHandle: {
+    width: 32,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cancelButton: {
     padding: Spacing.xxs,
     marginRight: -Spacing.xxs,
@@ -481,7 +669,21 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     marginTop: 1,
   },
+  currentStopActions: {
+    gap: Spacing.xxs,
+  },
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.half,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: Spacing.xs - 1.5,
+  },
   confirmButton: {
+    alignItems: 'center',
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
