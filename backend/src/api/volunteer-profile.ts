@@ -515,8 +515,7 @@ export default async function volunteerProfileAPI(
         
         if (
           !volunteer ||
-          !volunteer.security_answer_one ||
-          !volunteer.security_answer_two
+          !(volunteer.security_answer_one || volunteer.security_answer_two)
         ) {
           return reply.status(400).send({
             error: "IDENTITY_ERROR",
@@ -535,7 +534,7 @@ export default async function volunteerProfileAPI(
           volunteer.security_answer_two
         );
 
-        if (!answerOneValid || !answerTwoValid) {
+        if (!(answerOneValid || answerTwoValid)) {
           return reply.status(400).send({
             error: "IDENTITY_ERROR",
             message: "Unable to verify identity or reset password",
