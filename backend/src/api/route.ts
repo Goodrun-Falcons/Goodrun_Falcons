@@ -276,7 +276,6 @@ export default async function routeAPI(app: FastifyInstance) {
 
       // GET Route
       // Volunteer retrieves their route with ordered stops and pickup/item details
-
       app.get("/routes/:id", async (request, reply) => {
         const authHeader = request.headers.authorization;
 

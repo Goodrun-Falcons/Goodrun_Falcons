@@ -15,13 +15,13 @@ const supabase = createClient(
 );
 
 
-// GET Items
+// GET Requests
 // Volunteer requesting list of filtered items
 // US 10
 
-export default async function itemAPI(app: FastifyInstance) {
+export default async function requestAPI(app: FastifyInstance) {
 
-    app.get("/items", async (request, reply) => {
+    app.get("/requests", async (request, reply) => {
     const authHeader = request.headers.authorization;
 
     // check auth header format, return error when invalid
@@ -55,9 +55,29 @@ export default async function itemAPI(app: FastifyInstance) {
 
     // get item list
     const { data, error } = await supabaseUser
-        .from("items")
-        .select("*");
-
+        .from("requests")
+        .select(`
+            organisations (
+              name
+            ),
+            id,
+            description,
+            pickup_location,
+            dropoff_location,
+            urgency,
+            pickup_lat,
+            pickup_lng,
+            dropoff_lat,
+            dropoff_lng,
+            tag,
+            total_package_size,
+            request_items (
+              id,
+              item_type,
+              quantity
+            )
+        `)
+        .eq("status", "pending");
 
     if (error) {
         return reply.status(500).send({
@@ -70,9 +90,9 @@ export default async function itemAPI(app: FastifyInstance) {
 
 
     // POST Accept
-    // Volunteer accepts a pending item/request
+    // Volunteer accepts a pending request
     // US 11
-    app.post("/items/:id/accept", async (request, reply) => {
+    app.post("/requests/:id/accept", async (request, reply) => {
       const authHeader = request.headers.authorization;
 
       if (!authHeader?.startsWith("Bearer ")) {
@@ -103,25 +123,25 @@ export default async function itemAPI(app: FastifyInstance) {
         )
 
       
-      // obtain item ID
+      // obtain request ID
       const { id } = request.params as { id: string };
 
       
       // check item status, return error if not found or item unavailable
       const {
-        data: item,
-        error: itemError,
+        data,
+        error,
       } = await supabaseUser
-        .from("items")
+        .from("requests")
         .select("*")
         .eq("id", id)
         .single();
 
-      if (itemError || !item) {
+      if (error || !data) {
         return reply.status(404).send({ error: "Item not found" });
       }
 
-      if (item.status !== "pending") {
+      if (data.status !== "pending") {
         return reply
           .status(409)
           .send({ error: "Item is no longer available" });
@@ -132,10 +152,10 @@ export default async function itemAPI(app: FastifyInstance) {
       const {
         data: pickup,
         error: pickupError,
-      } = await supabase
+      } = await supabaseUser
         .from("pickups")
         .insert({
-          item_id: id,
+          request_id: id,
           volunteer_id: user.id,
           status: "assigned",
         })
@@ -147,17 +167,20 @@ export default async function itemAPI(app: FastifyInstance) {
 
         return reply
           .status(500)
-          .send({ error: "Failed to accept item" });
+          .send({ error: "Failed to accept request" });
       }
 
 
-      // update item status to be "accepted" after pickup creation
+      // update request status to be "accepted" after pickup creation
       const {
         data: updatedItem,
         error: updateError,
       } = await supabaseUser
-        .from("items")
-        .update({ status: "accepted" })
+        .from("requests")
+        .update({ 
+          status: "accepted",
+          accepted_at: new Date().toISOString() 
+        })
         .eq("id", id)
         .select()
         .single();
@@ -178,8 +201,8 @@ export default async function itemAPI(app: FastifyInstance) {
 
 
     // POST Cancel
-    // Volunteer cancels an item which they accepted earlier
-    app.post("/items/:id/cancel", async (request, reply) => {
+    // Volunteer cancels a request which they accepted earlier
+    app.post("/requests/:id/cancel", async (request, reply) => {
       const authHeader = request.headers.authorization;
   
       if (!authHeader?.startsWith("Bearer ")) {
@@ -210,28 +233,28 @@ export default async function itemAPI(app: FastifyInstance) {
         )
   
       
-      // obtain item ID
+      // obtain request ID
       const { id } = request.params as { id: string };
   
       
-      // check item status, return error if not found or item unavailable
+      // check request status, return error if not found or item unavailable
       const {
-        data: item,
-        error: itemError,
+        data,
+        error,
       } = await supabaseUser
-        .from("items")
+        .from("requests")
         .select("*")
         .eq("id", id)
         .single();
   
-      if (itemError || !item) {
-        return reply.status(404).send({ error: "Item not found" });
+      if (error || !data) {
+        return reply.status(404).send({ error: "Request not found" });
       }
   
-      if (item.status !== "accepted") {
+      if (data.status !== "accepted") {
         return reply
           .status(409)
-          .send({ error: "Item is not accepted or already in transit" });
+          .send({ error: "Request is not accepted or already in transit" });
       }
   
   
@@ -241,8 +264,9 @@ export default async function itemAPI(app: FastifyInstance) {
         error: pickupError} = await supabaseUser
         .from("pickups")
         .delete()
-        .eq("item_id", id)
+        .eq("request_id", id)
         .eq("volunteer_id", user.id)
+        .select("id")
         .maybeSingle();
   
       if (!pickupId) {
@@ -254,12 +278,12 @@ export default async function itemAPI(app: FastifyInstance) {
       }
   
   
-      // update item status to be "pending" after pickup deletion
+      // update request status to be "pending" after pickup deletion
       const {
         data: updatedItem,
         error: updateError,
-      } = await supabase
-        .from("items")
+      } = await supabaseUser
+        .from("requests")
         .update({ status: "pending" })
         .eq("id", id)
         .select()
@@ -274,15 +298,14 @@ export default async function itemAPI(app: FastifyInstance) {
       }
   
           
-      // return item
       return reply.status(200).send(updatedItem);
     });
 
 
 
-    // GET new item
+    // GET new request
     // Admin request newly accepted requests
-    app.get("/admin/items/accepted", async (request, reply) => {
+    app.get("/admin/requests/accepted", async (request, reply) => {
       try {
         const authHeader = request.headers.authorization;
 
@@ -352,15 +375,20 @@ export default async function itemAPI(app: FastifyInstance) {
 
         // query newly accepted items
         const {
-          data: items,
-          error: itemsError,
+          data,
+          error
         } = await supabaseUser
-          .from("items")
+          .from("requests")
           .select(`
+            organisations (
+              name
+            ),
             id,
-            item_type,
-            quantity,
             description,
+            request_items (
+              item_type,
+              quantity
+            ),
             urgency,
             status,
             accepted_at
@@ -370,19 +398,19 @@ export default async function itemAPI(app: FastifyInstance) {
           .order("accepted_at", { ascending: true })
           .limit(100);
 
-        if (itemsError) {
-          request.log.error(itemsError);
+        if (error) {
+          request.log.error(error);
 
           return reply.status(500).send({
             error: "Failed to retrieve accepted items",
           });
         }
 
-        const results = items ?? [];
+        const results = data ?? [];
 
         // return results
         return reply.status(200).send({
-          items: results
+          requests: results
         });
       } catch (error) {
         request.log.error(error);

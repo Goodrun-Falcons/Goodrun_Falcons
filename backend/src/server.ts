@@ -6,7 +6,7 @@ import multipart from "@fastify/multipart";
 import volunteerProfileAPI from "./api/volunteer-profile.js";
 import adminVolunteerAPI from "./api/admin-volunteer.js";
 import routeAPI from "./api/route.js";
-import itemsAPI from "./api/items.js";
+import itemsAPI from "./api/requests.js";
 
 const app = Fastify({
   logger: true,
