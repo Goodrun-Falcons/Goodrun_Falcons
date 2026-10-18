@@ -21,6 +21,10 @@ export default function RegisterScreen() {
   const [isSizeDropdownOpen, setIsSizeDropdownOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [securityQuestionOne, setSecurityQuestionOne] = useState('');
+  const [securityAnswerOne, setSecurityAnswerOne] = useState('');
+  const [securityQuestionTwo, setSecurityQuestionTwo] = useState('');
+  const [securityAnswerTwo, setSecurityAnswerTwo] = useState('');
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const normalizedPhone = phone.replace(/[\s()-]/g, '');
   const australianMobilePattern = /^(?:\+61|0)?4\d{8}$/;
@@ -33,10 +37,14 @@ export default function RegisterScreen() {
     if (
       name.trim() === '' ||
       email.trim() === '' ||
+      password.trim() === '' ||
+      confirmPassword === '' ||
       phone.trim() === '' ||
       size.trim() === '' ||
-      password.trim() === '' ||
-      confirmPassword === ''
+      securityQuestionOne.trim() === '' ||
+      securityAnswerOne.trim() === '' ||
+      securityQuestionTwo.trim() === '' ||
+      securityAnswerTwo.trim() === ''
     ) {
       setErrorMessage('Please complete all fields.');
       return;
@@ -65,10 +73,14 @@ export default function RegisterScreen() {
 
     const registerData = {
       email: email.trim(),
-      full_name: name,
-      phone: phone,
+      full_name: name.trim(),
+      phone: normalizedPhone,
       password: password,
       preferred_package_size: size.trim().split(/\s+/)[0],
+      security_question_one: securityQuestionOne.trim(),
+      security_answer_one: securityAnswerOne.trim(),
+      security_question_two: securityQuestionTwo.trim(),
+      security_answer_two: securityAnswerTwo.trim(),
     };
 
     const registerRequest = {
@@ -79,14 +91,13 @@ export default function RegisterScreen() {
 
     try {
       const response = await fetch(URL, registerRequest);
-      const data = await response.json();
-
       if (response.ok) {
         router.replace('/register-success');
         return;
       } else {
+        const data = await response.json().catch(() => null);
         setErrorMessage(
-          data.message || data.error || 'Unable to register. Please try again later.'
+          data?.message || data?.error || 'Unable to register. Please try again later.'
         );
         return;
       }
@@ -215,6 +226,53 @@ export default function RegisterScreen() {
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="new-password"
+          editable={!isLoading}
+        />
+      </View>
+      <View style={authStyles.divider} />
+      <View style={authStyles.section}>
+        <Text accessibilityRole="header" style={authStyles.sectionTitle}>
+          Security questions
+        </Text>
+        <Text style={authStyles.hint}>
+          Create two questions and answers you can remember. You will use these to reset your password.
+        </Text>
+        <AuthField
+          label="Security question 1"
+          placeholder="Write your first question"
+          value={securityQuestionOne}
+          onChangeText={setSecurityQuestionOne}
+          autoCapitalize="sentences"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
+        <AuthField
+          label="Answer 1"
+          placeholder="Enter your first answer"
+          value={securityAnswerOne}
+          onChangeText={setSecurityAnswerOne}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
+        <AuthField
+          label="Security question 2"
+          placeholder="Write your second question"
+          value={securityQuestionTwo}
+          onChangeText={setSecurityQuestionTwo}
+          autoCapitalize="sentences"
+          autoCorrect={false}
+          editable={!isLoading}
+        />
+        <AuthField
+          label="Answer 2"
+          placeholder="Enter your second answer"
+          value={securityAnswerTwo}
+          onChangeText={setSecurityAnswerTwo}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
           editable={!isLoading}
           onSubmitEditing={handleRegister}
           returnKeyType="go"
