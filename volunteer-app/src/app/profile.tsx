@@ -1,3 +1,9 @@
+import { ThemedText } from '@/components/themed-text';
+import { BrandColors, Radius, Spacing, Typography } from '@/constants/theme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,13 +17,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
-import { ThemedText } from '@/components/themed-text';
-import { BrandColors, Radius, Spacing, Typography } from '@/constants/theme';
 
 const fieldIcons = {
   fullName: 'person-outline',
@@ -31,8 +31,6 @@ const packageOptions = [
   { value: 'medium', title: 'Medium', description: 'Uses the whole back seat' },
   { value: 'large', title: 'Large', description: 'Requires a truck' },
 ];
-
-const PROFILE_URL = 'https://goodrun-backend.onrender.com/volunteers/me';
 
 const PROFILE_URL = 'https://goodrun-backend.onrender.com/volunteers/me';
 
@@ -275,7 +273,6 @@ export default function ProfileScreen() {
       setError('Unable to log out. Please try again.');
     }
   }
-
 
   return (
     <View style={styles.container}>

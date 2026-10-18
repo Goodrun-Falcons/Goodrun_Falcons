@@ -3,6 +3,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { LocationProvider } from '@/context/location-context';
+import { TasksProvider } from '@/context/tasks-context';
 import { TripProvider } from '@/context/trip-context';
 
 import { Poppins_400Regular, Poppins_700Bold, useFonts } from '@expo-google-fonts/poppins';
@@ -29,10 +31,14 @@ export default function TabLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <TripProvider>
-        <AnimatedSplashOverlay />
-        <Stack screenOptions={{ headerShown: false, gestureEnabled: false }} />
-      </TripProvider>
+      <LocationProvider>
+        <TasksProvider>
+          <TripProvider>
+            <AnimatedSplashOverlay />
+            <Stack screenOptions={{ headerShown: false, gestureEnabled: false }} />
+          </TripProvider>
+        </TasksProvider>
+      </LocationProvider>
     </ThemeProvider>
   );
 }

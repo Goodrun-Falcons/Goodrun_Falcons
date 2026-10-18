@@ -1,7 +1,7 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { InteractiveMap } from '@/components/interactive-map';
 import { TaskCard } from '@/components/task-card';
+import { TeamFilter } from '@/components/team-filter';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -20,13 +21,13 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useLocation } from '@/context/location-context';
+import { useTasks } from '@/context/tasks-context';
 import { useTrip } from '@/context/trip-context';
-import { mockTasks, WAREHOUSE_COORDS } from '@/data/mock-tasks';
+import { useAreaName } from '@/hooks/use-area-name';
 import { useTheme } from '@/hooks/use-theme';
-import { Task } from '@/types/task';
-
-// Placeholder until Story 3 (service area) / real geolocation supplies this.
-const SERVICE_AREA = 'Brunswick, VIC';
+import { MAX_RUNS_PER_TRIP } from '@/lib/stop-order';
+import { Task, TaskTeam } from '@/types/task';
 
 const SHEET_COLLAPSED_RATIO = 0.16;
 const SHEET_DEFAULT_RATIO = 0.46;
@@ -56,8 +57,14 @@ export default function NearbyScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const { acceptTask, isAccepted, acceptedCount } = useTrip();
+  const { acceptTask, isAccepted, acceptedCount, canAcceptMore } = useTrip();
+  const { coords, status: locationStatus, requestPermission } = useLocation();
+  // Set when arriving from a Home card: `/nearby?highlight=<taskId>`.
+  const { highlight } = useLocalSearchParams<{ highlight?: string }>();
+  const areaName = useAreaName(coords);
   const [radiusKm, setRadiusKm] = useState<number | null>(RADIUS_OPTIONS[0].km);
+  // Null shows every team.
+  const [team, setTeam] = useState<TaskTeam | null>(null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   // The sheet's snap points are a % of the map area, not the full window —
   // the docked header above the map shortens that area, so measure it directly
@@ -65,18 +72,50 @@ export default function NearbyScreen() {
   const [mapAreaHeight, setMapAreaHeight] = useState(windowHeight);
   const listRef = useRef<FlatList<Task>>(null);
 
-  const tasks = mockTasks
-    .filter((task) => radiusKm === null || task.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm);
+  const allTasks = useTasks();
+  const tasks = allTasks
+    .filter((task) => radiusKm === null || (task.distanceKm ?? 0) <= radiusKm)
+    .filter((task) => team === null || task.team === team)
+    .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+
+  // Outline the run the volunteer tapped on Home, widening the radius filter just enough
+  // (and clearing a team filter that excludes it) so it isn't hidden. Adjusted during render (React's pattern for responding to a
+  // changed input) so the first paint already has the right filter and outline.
+  const [handledHighlight, setHandledHighlight] = useState<string | undefined>();
+  if (highlight && highlight !== handledHighlight) {
+    setHandledHighlight(highlight);
+    const target = allTasks.find((task) => task.id === highlight);
+    if (target) {
+      setHighlightedTaskId(highlight);
+      const distance = target.distanceKm ?? 0;
+      if (radiusKm !== null && distance > radiusKm) {
+        setRadiusKm(RADIUS_OPTIONS.find((o) => o.km === null || distance <= o.km)?.km ?? null);
+      }
+      if (team !== null && target.team !== team) setTeam(null);
+    }
+  }
+
+  // Then bring its card into view. Keyed on the request only — the list re-sorts as the
+  // volunteer moves, and that shouldn't keep yanking it back to this card.
+  useEffect(() => {
+    if (!handledHighlight) return;
+    const index = tasks.findIndex((task) => task.id === handledHighlight);
+    if (index !== -1) listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handledHighlight]);
+
+  const locationOff = locationStatus === 'denied' || locationStatus === 'blocked';
+  const locationLabel = locationOff
+    ? 'Location off · tap to enable'
+    : (areaName ?? (coords ? 'Near you' : 'Locating…'));
 
   const mapMarkers = [
-    { ...WAREHOUSE_COORDS, color: BrandColors.white },
     ...tasks
       .filter((task) => task.urgency === 'urgent')
-      .map((task) => ({ ...task.orgCoords, color: BrandColors.red, id: task.id })),
+      .map((task) => ({ ...task.pickupCoords, color: BrandColors.red, id: task.id })),
     ...tasks
       .filter((task) => task.urgency !== 'urgent')
-      .map((task) => ({ ...task.orgCoords, color: '#8a8d99', id: task.id })),
+      .map((task) => ({ ...task.pickupCoords, color: '#8a8d99', id: task.id })),
   ];
 
   const collapsedHeight = Math.round(mapAreaHeight * SHEET_COLLAPSED_RATIO);
@@ -135,15 +174,30 @@ export default function NearbyScreen() {
         */}
         <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
           <View style={styles.topBarContent}>
-            <View style={styles.locationBadge}>
-              <SymbolView
-                name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
-                tintColor={theme.primaryText}
-                size={11}
-              />
-              <ThemedText style={styles.locationBadgeLabel} themeColor="primaryText">
-                {SERVICE_AREA}
-              </ThemedText>
+            <View style={styles.topBarRow}>
+              <Pressable
+                onPress={requestPermission}
+                disabled={!locationOff}
+                style={styles.locationBadge}
+              >
+                <SymbolView
+                  name={
+                    locationOff
+                      ? { ios: 'location.slash', android: 'location_off', web: 'location_off' }
+                      : { ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }
+                  }
+                  tintColor={theme.primaryText}
+                  size={11}
+                />
+                <ThemedText
+                  style={styles.locationBadgeLabel}
+                  themeColor="primaryText"
+                  numberOfLines={1}
+                >
+                  {locationLabel}
+                </ThemedText>
+              </Pressable>
+              <TeamFilter value={team} onChange={setTeam} />
             </View>
 
             <View style={styles.filterRow}>
@@ -188,6 +242,7 @@ export default function NearbyScreen() {
         >
           <InteractiveMap
             markers={mapMarkers}
+            userLocation={coords}
             style={styles.mapImage}
             onMarkerPress={handleMarkerPress}
           />
@@ -209,6 +264,9 @@ export default function NearbyScreen() {
                 <TaskCard
                   task={item}
                   accepted={isAccepted(item.id)}
+                  acceptBlockedReason={
+                    canAcceptMore ? undefined : `Trip full · ${MAX_RUNS_PER_TRIP} runs max`
+                  }
                   onAccept={() => acceptTask(item)}
                   highlighted={item.id === highlightedTaskId}
                 />
@@ -222,7 +280,9 @@ export default function NearbyScreen() {
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
                 <ThemedText style={styles.emptyState} themeColor="mute">
-                  No runs within this radius — try widening your search.
+                  {team === null
+                    ? 'No runs within this radius — try widening your search.'
+                    : 'No runs for this team within this radius — try another team or a wider radius.'}
                 </ThemedText>
               }
             />
@@ -273,16 +333,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.md,
   },
+  topBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
   locationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    flexShrink: 1,
     gap: Spacing.half,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.xs,
     paddingVertical: Spacing.half + 1,
-    marginBottom: Spacing.sm,
   },
   locationBadgeLabel: {
     ...Typography.caption,

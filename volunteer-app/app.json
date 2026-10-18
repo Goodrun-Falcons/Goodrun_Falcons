@@ -36,6 +36,12 @@
       "expo-font",
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Goodrun uses your location to show nearby pickups and guide you along your route."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "cameraPermission": "Goodrun needs camera access so you can photograph items during pickup handover.",
