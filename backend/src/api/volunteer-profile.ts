@@ -464,7 +464,7 @@ export default async function volunteerProfileAPI(
     }
 
     if (!questions) {
-      return reply.status(400).send({message: "Email not found or quesions not filled"})
+      return reply.status(400).send({message: "Email not found"})
     }
 
     return reply.send(questions);
@@ -580,6 +580,60 @@ export default async function volunteerProfileAPI(
   );
 
 
+  app.post("/volunteers/create-ticket", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    const body = request.body as {
+      subject: string,
+      message: string
+    }
+
+    const {
+      subject,
+      message
+    } = body;
+
+    const {error } = await supabaseUser
+    .from("support_tickets")
+    .insert({
+      subject: subject,
+      message: message,
+      volunteer_id: user.id,
+      status: "open",
+    });
+
+    if (error) {return reply.status(400).send({ message: "Failed to create support ticket" })};
+
+    return reply.status(201).send({ message: "Support ticket submitted successfully" });
+
+  });
   
 
 }
