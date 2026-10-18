@@ -463,6 +463,10 @@ export default async function volunteerProfileAPI(
       return reply.status(400).send({error: error});
     }
 
+    if (!questions) {
+      return reply.status(400).send({message: "Email not found or quesions not filled"})
+    }
+
     return reply.send(questions);
   });
   
