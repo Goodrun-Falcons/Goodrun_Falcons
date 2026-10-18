@@ -9,6 +9,7 @@ import {
   PasswordMatchIndicator,
   passwordMeetsRequirements,
 } from "@/components/PasswordRequirements";
+import { SECURITY_QUESTIONS } from "@/lib/securityQuestions";
 
 function MailIcon() {
   return (
@@ -70,6 +71,10 @@ export default function SignupPage() {
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [securityQuestion1, setSecurityQuestion1] = useState("");
+  const [securityAnswer1, setSecurityAnswer1] = useState("");
+  const [securityQuestion2, setSecurityQuestion2] = useState("");
+  const [securityAnswer2, setSecurityAnswer2] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -84,6 +89,18 @@ export default function SignupPage() {
     }
     if (!passwordMeetsRequirements(password)) {
       setError("Password does not meet all requirements below.");
+      return;
+    }
+    if (!securityQuestion1 || !securityQuestion2) {
+      setError("Please select both security questions.");
+      return;
+    }
+    if (securityQuestion1 === securityQuestion2) {
+      setError("Please choose two different security questions.");
+      return;
+    }
+    if (!securityAnswer1.trim() || !securityAnswer2.trim()) {
+      setError("Please answer both security questions.");
       return;
     }
 
@@ -105,6 +122,10 @@ export default function SignupPage() {
       email,
       phone: phone || null,
       address: address || null,
+      security_question_1: securityQuestion1,
+      security_answer_1_hash: securityAnswer1,
+      security_question_2: securityQuestion2,
+      security_answer_2_hash: securityAnswer2,
     });
 
     setLoading(false);
@@ -298,6 +319,78 @@ export default function SignupPage() {
                     </span>
                   </div>
                   <PasswordMatchIndicator password={password} confirmPassword={confirmPassword} />
+                </div>
+
+                <div className="flex flex-col gap-4 border-t border-[#e1e3e4] pt-5">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[14px] font-semibold text-[#191c1d]">Security Questions</span>
+                    <p className="text-[12px] text-[#6b7280]">
+                      Used to reset your password later - pick two different questions. Only one correct
+                      answer is needed to reset your password.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="securityQuestion1" className="text-[12px] font-semibold tracking-[0.6px] text-[#191c1d]">
+                      Security Question 1
+                    </label>
+                    <select
+                      id="securityQuestion1"
+                      required
+                      value={securityQuestion1}
+                      onChange={(e) => setSecurityQuestion1(e.target.value)}
+                      className="w-full rounded-lg border border-[#e1e3e4] bg-[#f3f4f5] px-[13px] py-[15px] text-[16px] text-[#191c1d] focus:outline-none focus:ring-2 focus:ring-[#11183c]"
+                    >
+                      <option value="" disabled>
+                        Select a question
+                      </option>
+                      {SECURITY_QUESTIONS.map((q) => (
+                        <option key={q} value={q} disabled={q === securityQuestion2}>
+                          {q}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      id="securityAnswer1"
+                      type="text"
+                      required
+                      value={securityAnswer1}
+                      onChange={(e) => setSecurityAnswer1(e.target.value)}
+                      placeholder="Your answer"
+                      className="w-full rounded-lg border border-[#e1e3e4] bg-[#f3f4f5] px-[13px] py-[15px] text-[16px] text-[#191c1d] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#11183c]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="securityQuestion2" className="text-[12px] font-semibold tracking-[0.6px] text-[#191c1d]">
+                      Security Question 2
+                    </label>
+                    <select
+                      id="securityQuestion2"
+                      required
+                      value={securityQuestion2}
+                      onChange={(e) => setSecurityQuestion2(e.target.value)}
+                      className="w-full rounded-lg border border-[#e1e3e4] bg-[#f3f4f5] px-[13px] py-[15px] text-[16px] text-[#191c1d] focus:outline-none focus:ring-2 focus:ring-[#11183c]"
+                    >
+                      <option value="" disabled>
+                        Select a question
+                      </option>
+                      {SECURITY_QUESTIONS.map((q) => (
+                        <option key={q} value={q} disabled={q === securityQuestion1}>
+                          {q}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      id="securityAnswer2"
+                      type="text"
+                      required
+                      value={securityAnswer2}
+                      onChange={(e) => setSecurityAnswer2(e.target.value)}
+                      placeholder="Your answer"
+                      className="w-full rounded-lg border border-[#e1e3e4] bg-[#f3f4f5] px-[13px] py-[15px] text-[16px] text-[#191c1d] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#11183c]"
+                    />
+                  </div>
                 </div>
 
                 {error && (

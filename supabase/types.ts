@@ -160,6 +160,10 @@ export type Database = {
           location: unknown
           name: string
           phone: string | null
+          security_answer_1_hash: string | null
+          security_answer_2_hash: string | null
+          security_question_1: string | null
+          security_question_2: string | null
           verified: boolean
         }
         Insert: {
@@ -170,6 +174,10 @@ export type Database = {
           location?: unknown
           name: string
           phone?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           verified?: boolean
         }
         Update: {
@@ -180,6 +188,10 @@ export type Database = {
           location?: unknown
           name?: string
           phone?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           verified?: boolean
         }
         Relationships: []
@@ -310,6 +322,10 @@ export type Database = {
           phone: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          security_answer_1_hash: string | null
+          security_answer_2_hash: string | null
+          security_question_1: string | null
+          security_question_2: string | null
           status: string
         }
         Insert: {
@@ -322,6 +338,10 @@ export type Database = {
           phone?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           status?: string
         }
         Update: {
@@ -334,6 +354,10 @@ export type Database = {
           phone?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
           status?: string
         }
         Relationships: [
@@ -422,9 +446,10 @@ export type Database = {
           completed_trips_count: number
           created_at: string
           email: string
-          full_name: string | null
+          full_name: string
           id: string
-          phone: string | null
+          phone: string
+          preferred_package_size: string
           service_area: unknown
           status: string
           vehicle_type: string | null
@@ -434,9 +459,10 @@ export type Database = {
           completed_trips_count?: number
           created_at?: string
           email: string
-          full_name?: string | null
+          full_name: string
           id: string
-          phone?: string | null
+          phone: string
+          preferred_package_size?: string
           service_area?: unknown
           status?: string
           vehicle_type?: string | null
@@ -446,9 +472,10 @@ export type Database = {
           completed_trips_count?: number
           created_at?: string
           email?: string
-          full_name?: string | null
+          full_name?: string
           id?: string
-          phone?: string | null
+          phone?: string
+          preferred_package_size?: string
           service_area?: unknown
           status?: string
           vehicle_type?: string | null
