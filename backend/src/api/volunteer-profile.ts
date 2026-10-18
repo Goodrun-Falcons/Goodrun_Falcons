@@ -335,6 +335,7 @@ export default async function volunteerProfileAPI(
         }
       
         return reply.status(500).send({
+          err: volunteerError,
           error: "Failed to create volunteer application",
         });
       }
