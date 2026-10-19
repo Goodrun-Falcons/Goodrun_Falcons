@@ -107,4 +107,77 @@ export default async function adminVolunteerAPI(
         });
         }
     });
+
+
+    app.get("/admin/volunteers/tickets", async (request, reply) => {
+        const authHeader = request.headers.authorization;
+
+        if (!authHeader?.startsWith("Bearer ")) {
+            return reply.status(401).send({
+            error: "Missing or invalid authorisation header",
+            });
+        }
+
+        const token = authHeader.substring("Bearer ".length);
+
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
+            return reply.status(401).send({
+            error: "Unauthorised",
+            });
+        }
+
+        const supabaseUser = createClient(
+            process.env.SUPABASE_URL!,
+            process.env.SUPABASE_PUBLISHABLE_KEY!,
+            {
+            accessToken: async () => token,
+            }
+        );
+
+        // check Admin permission
+        const {
+            data: admin,
+            error: adminError,
+        } = await supabaseUser
+            .from("admins")
+            .select("id")
+            .eq("id", user.id)
+            .maybeSingle();
+
+        if (adminError) {
+            request.log.error(adminError);
+
+            return reply.status(500).send({
+            error: "Failed to verify admin permissions",
+            });
+        }
+
+        if (!admin) {
+            return reply.status(403).send({
+            error: "FORBIDDEN",
+            message: "Admin access is required.",
+            });
+        }
+
+        const { data, error } = await supabaseUser
+        .from("support_tickets")
+        .select(`
+            id,
+            subject,
+            message,
+            status,
+            organisation_id,
+            volunteer_id
+        `)
+        .eq("status", "open")
+        
+        if (error) {return reply.status(500).send({message: "Error occurred when retrieving tickets"})};
+        return reply.status(200).send(data);
+    });
+
 }

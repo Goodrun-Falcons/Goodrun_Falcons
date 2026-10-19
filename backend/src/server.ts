@@ -6,7 +6,7 @@ import multipart from "@fastify/multipart";
 import volunteerProfileAPI from "./api/volunteer-profile.js";
 import adminVolunteerAPI from "./api/admin-volunteer.js";
 import routeAPI from "./api/route.js";
-import itemsAPI from "./api/requests.js";
+import requestsAPI from "./api/requests.js";
 
 const app = Fastify({
   logger: true,
@@ -36,7 +36,7 @@ app.get("/health", async () => {
 app.register(volunteerProfileAPI);
 app.register(adminVolunteerAPI);
 app.register(routeAPI);
-app.register(itemsAPI);
+app.register(requestsAPI);
 
 // start server
 const start = async () => {

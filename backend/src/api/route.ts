@@ -331,17 +331,15 @@ export default async function routeAPI(app: FastifyInstance) {
               completion_time,
               pickups (
                 id,
-                item_id,
+                request_id,
                 volunteer_id,
                 status,
                 handover_photo_url,
                 handover_timestamp,
                 started_at,
                 ended_at,
-                items (
+                requests (
                   id,
-                  item_type,
-                  quantity,
                   description,
                   pickup_location,
                   dropoff_location,
