@@ -124,7 +124,7 @@ export default async function requestAPI(app: FastifyInstance) {
       const { id } = request.params as { id: string };
 
       
-      // check item status, return error if not found or item unavailable
+      // check request status, return error if not found or request unavailable
       const {
         data,
         error,
@@ -197,6 +197,71 @@ export default async function requestAPI(app: FastifyInstance) {
       });
 
 
+
+    app.get("/accepted-requests", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+  
+      // check auth header format, return error when invalid
+      if (!authHeader?.startsWith("Bearer ")) {
+          return reply.status(401).send({
+          error: "Missing or invalid authorisation header"
+          });
+      }
+  
+      const token = authHeader.substring("Bearer ".length);
+  
+      // get current user, check for authorisation
+      const {
+          data: { user },
+          error: authError
+      } = await supabase.auth.getUser(token);
+  
+      if (authError || !user) {
+          return reply.status(401).send({
+          error: "Unauthorised"
+          });
+      }
+  
+      const supabaseUser = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_PUBLISHABLE_KEY!,
+          {
+              accessToken: async() => token
+          }
+          )
+  
+      // get request list
+      const { data, error } = await supabaseUser
+          .from("requests")
+          .select(`
+              id,
+              description,
+              pickup_location,
+              dropoff_location,
+              urgency,
+              pickup_lat,
+              pickup_lng,
+              dropoff_lat,
+              dropoff_lng,
+              tag,
+              total_package_size,
+              request_items (
+                id,
+                item_type,
+                quantity
+              )
+          `)
+          .eq("status", "accepted")
+          .eq("volunteer_id", user.id);
+  
+      if (error) {
+          return reply.status(500).send({
+          error: error.message
+          });
+      }
+  
+      return reply.send(data);
+      });
 
     // POST Cancel
     // Volunteer cancels a request which they accepted earlier
