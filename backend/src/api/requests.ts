@@ -300,7 +300,7 @@ export default async function requestAPI(app: FastifyInstance) {
       const { id } = request.params as { id: string };
   
       
-      // check request status, return error if not found or item unavailable
+      // check request status, return error if not found or  unavailable
       const {
         data,
         error,
@@ -337,7 +337,7 @@ export default async function requestAPI(app: FastifyInstance) {
   
         return reply
           .status(500)
-          .send({ error: "Failed to find pickup" });
+          .send({ message: error });
       }
   
   
