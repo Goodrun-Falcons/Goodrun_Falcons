@@ -53,13 +53,10 @@ export default async function requestAPI(app: FastifyInstance) {
         }
         )
 
-    // get item list
+    // get request list
     const { data, error } = await supabaseUser
         .from("requests")
         .select(`
-            organisations (
-              name
-            ),
             id,
             description,
             pickup_location,
@@ -138,13 +135,13 @@ export default async function requestAPI(app: FastifyInstance) {
         .single();
 
       if (error || !data) {
-        return reply.status(404).send({ error: "Item not found" });
+        return reply.status(404).send({ error: "Request not found" });
       }
 
       if (data.status !== "pending") {
         return reply
           .status(409)
-          .send({ error: "Item is no longer available" });
+          .send({ error: "Request is no longer available" });
       }
 
 
@@ -167,7 +164,7 @@ export default async function requestAPI(app: FastifyInstance) {
 
         return reply
           .status(500)
-          .send({ error: "Failed to accept request" });
+          .send({ error:pickupError, message: "Failed to accept request" });
       }
 
 
@@ -179,7 +176,8 @@ export default async function requestAPI(app: FastifyInstance) {
         .from("requests")
         .update({ 
           status: "accepted",
-          accepted_at: new Date().toISOString() 
+          accepted_at: new Date().toISOString(), 
+          volunteer_id: user.id
         })
         .eq("id", id)
         .select()
@@ -190,7 +188,7 @@ export default async function requestAPI(app: FastifyInstance) {
 
         return reply
           .status(500)
-          .send({ error: "Pickup created but failed to update item status" });
+          .send({ error: "Pickup created but failed to update request status" });
       }
 
           
@@ -284,7 +282,7 @@ export default async function requestAPI(app: FastifyInstance) {
         error: updateError,
       } = await supabaseUser
         .from("requests")
-        .update({ status: "pending" })
+        .update({ status: "pending", volunteer_id: null})
         .eq("id", id)
         .select()
         .single();
