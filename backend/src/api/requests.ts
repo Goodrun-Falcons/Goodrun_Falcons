@@ -300,7 +300,7 @@ export default async function requestAPI(app: FastifyInstance) {
       const { id } = request.params as { id: string };
   
       
-      // check request status, return error if not found or  unavailable
+      // check request status, return error if not found or unavailable
       const {
         data,
         error,
@@ -347,7 +347,10 @@ export default async function requestAPI(app: FastifyInstance) {
         error: updateError,
       } = await supabaseUser
         .from("requests")
-        .update({ status: "pending", volunteer_id: null})
+        .update({ 
+          status: "pending", 
+          volunteer_id: null,
+          accepted_at: null})
         .eq("id", id)
         .select()
         .single();
@@ -357,7 +360,7 @@ export default async function requestAPI(app: FastifyInstance) {
   
         return reply
           .status(500)
-          .send({ error: "Pickup created but failed to update item status" });
+          .send({ error: "Pickup created but failed to update request status" });
       }
   
           
