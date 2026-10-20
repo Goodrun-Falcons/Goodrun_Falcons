@@ -342,9 +342,6 @@ export default async function routeAPI(app: FastifyInstance) {
               id,
               stop_type,
               sequence_number,
-              status,
-              arrival_time,
-              completion_time,
               pickups (
                 id,
                 request_id,
