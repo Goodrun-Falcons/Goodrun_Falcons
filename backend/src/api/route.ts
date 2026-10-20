@@ -640,7 +640,7 @@ export default async function routeAPI(app: FastifyInstance) {
           );
 
           return reply.status(500).send({
-            message: "Failed to insert new route stops",
+            error: error, message: "Failed to insert new route stops"
           });
         }
       }
@@ -667,7 +667,7 @@ export default async function routeAPI(app: FastifyInstance) {
           );
 
           return reply.status(500).send({
-            message: "Failed to update route stop",
+            error: error, message: "Failed to update route stop",
           });
         }
       }
@@ -695,13 +695,13 @@ export default async function routeAPI(app: FastifyInstance) {
           );
 
           return reply.status(500).send({
-            message: "Failed to delete obsolete route stops",
+            error: error, message: "Failed to delete obsolete route stops",
           });
         }
 
         if ((deletedStops?.length ?? 0) !== toDelete.length) {
           return reply.status(500).send({
-            message: "Not all obsolete route stops could be deleted",
+            error: error, message: "Not all obsolete route stops could be deleted",
           });
         }
       }
@@ -730,7 +730,7 @@ export default async function routeAPI(app: FastifyInstance) {
           );
 
           return reply.status(500).send({
-            message: "Failed to bind pickups to route",
+            error: bindError, message: "Failed to bind pickups to route",
           });
         }
       }
@@ -760,7 +760,7 @@ export default async function routeAPI(app: FastifyInstance) {
           );
 
           return reply.status(500).send({
-            message: "Failed to unbind pickups from route",
+            error: unbindError, message: "Failed to unbind pickups from route",
           });
         }
       }
