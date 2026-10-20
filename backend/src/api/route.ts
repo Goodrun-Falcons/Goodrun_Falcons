@@ -37,11 +37,19 @@ export default async function routeAPI(app: FastifyInstance) {
         return reply.status(401).send({ error: "Unauthorised" });
     }
 
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async () => token,
+      }
+    );
+
     // create a new route
     const {
         data: route,
         error: routeError,
-    } = await supabase
+    } = await supabaseUser
         .from("routes")
         .insert({
         volunteer_id: user.id,
@@ -86,6 +94,14 @@ export default async function routeAPI(app: FastifyInstance) {
       return reply.status(401).send({ error: "Unauthorised" });
     }
 
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async () => token,
+      }
+    );
+
 
     // get route ID
     const { id } = request.params as { id: string };
@@ -94,7 +110,7 @@ export default async function routeAPI(app: FastifyInstance) {
     const {
       data: route,
       error: routeError,
-    } = await supabase
+    } = await supabaseUser
       .from("routes")
       .select("*")
       .eq("id", id)
