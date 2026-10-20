@@ -374,6 +374,206 @@ export default async function routeAPI(app: FastifyInstance) {
 
         return reply.status(200).send(route);
     });
-    
 
+
+      app.put("/routes/:routeId/stops", async (request, reply) => {
+        const { routeId } = request.params as {
+          routeId: string;
+        };
+      
+        const body = request.body as {
+          stops?: unknown;
+        };
+      
+        // validate the complete stops array.
+        if (!Array.isArray(body?.stops)) {
+          return reply.status(400).send({
+            error: "stops must be an array",
+          });
+        }
+      
+        const stops = body.stops as {
+          pickup_id: string;
+          stop_type: "pickup" | "dropoff";
+          sequence_number: number;
+        }[];
+      
+        const valid = stops.every(
+          (stop) =>
+            stop !== null &&
+            typeof stop === "object" &&
+            typeof stop.pickup_id === "string" &&
+            stop.pickup_id.length > 0 &&
+            ["pickup", "dropoff"].includes(stop.stop_type) &&
+            Number.isSafeInteger(stop.sequence_number) &&
+            stop.sequence_number > 0
+        );
+      
+        if (!valid) {
+          return reply.status(400).send({
+            error: "Invalid stop data",
+          });
+        }
+      
+        // every sequence number must be unique and consecutive.
+        const sequences = stops
+          .map((stop) => stop.sequence_number)
+          .sort((a, b) => a - b);
+      
+        if (!sequences.every((seq, index) => seq === index + 1)) {
+          return reply.status(400).send({
+            error: "Sequence numbers must be unique and consecutive from 1",
+          });
+        }
+      
+        // each pickup must have exactly one pickup stopand one dropoff stop.
+        const typesByPickup = new Map<string, Set<string>>();
+      
+        for (const stop of stops) {
+          if (!typesByPickup.has(stop.pickup_id)) {
+            typesByPickup.set(stop.pickup_id, new Set());
+          }
+      
+          const types = typesByPickup.get(stop.pickup_id)!;
+      
+          if (types.has(stop.stop_type)) {
+            return reply.status(400).send({
+              error: "Duplicate stop for the same pickup and stop type",
+            });
+          }
+      
+          types.add(stop.stop_type);
+        }
+      
+        for (const types of typesByPickup.values()) {
+          if (!types.has("pickup") || !types.has("dropoff")) {
+            return reply.status(400).send({
+              error: "Each pickup must have both pickup and dropoff stops",
+            });
+          }
+        }
+      
+        // retrieve existing stops for this route.
+        const {
+          data: existingStops,
+          error: fetchError,
+        } = await supabaseUser
+          .from("route_stops")
+          .select("id, pickup_id, stop_type, sequence_number, status")
+          .eq("route_id", routeId);
+      
+        if (fetchError) {
+          request.log.error({ err: fetchError }, "Failed to fetch route stops");
+      
+          return reply.status(500).send({
+            error: "Failed to retrieve route stops",
+          });
+        }
+      
+        // match a stop by its business identity.
+        const keyOf = (stop: {
+          pickup_id: string;
+          stop_type: string;
+        }) => `${stop.pickup_id}:${stop.stop_type}`;
+      
+        const existingByKey = new Map(
+          existingStops.map((stop) => [keyOf(stop), stop])
+        );
+      
+        const incomingKeys = new Set(stops.map(keyOf));
+      
+        if (incomingKeys.size !== stops.length) {
+          return reply.status(400).send({
+            error: "Duplicate stops are not allowed",
+          });
+        }
+      
+        // split the incoming state into inserts and updates.
+        const toInsert = [];
+        const toUpdate = [];
+      
+        for (const stop of stops) {
+          const existing = existingByKey.get(keyOf(stop));
+      
+          if (!existing) {
+            toInsert.push({
+              route_id: routeId,
+              pickup_id: stop.pickup_id,
+              stop_type: stop.stop_type,
+              sequence_number: stop.sequence_number,
+              status: "pending", // Replace if your valid initial status differs.
+            });
+          } else if (existing.sequence_number !== stop.sequence_number) {
+            toUpdate.push({
+              id: existing.id,
+              sequence_number: stop.sequence_number,
+            });
+          }
+        }
+      
+        // insert all new stops in one operation.
+        if (toInsert.length > 0) {
+          const { error } = await supabaseUser
+            .from("route_stops")
+            .insert(toInsert);
+      
+          if (error) {
+            request.log.error({ err: error }, "Failed to insert route stops");
+      
+            return reply.status(500).send({
+              error: "Failed to insert new route stops",
+            });
+          }
+        }
+      
+        // update sequence numbers for existing stops.
+        for (const stop of toUpdate) {
+          const { data: updated, error } = await supabaseUser
+            .from("route_stops")
+            .update({ sequence_number: stop.sequence_number })
+            .eq("route_id", routeId)
+            .eq("id", stop.id)
+            .select("id")
+            .maybeSingle();
+      
+          if (error || !updated) {
+            request.log.error(
+              { err: error, stopId: stop.id },
+              "Failed to update route stop"
+            );
+      
+            return reply.status(500).send({
+              error: "Failed to update route stop",
+            });
+          }
+        }
+      
+        // delete existing stops absent from the incoming state.
+        const toDelete = existingStops
+          .filter((stop) => !incomingKeys.has(keyOf(stop)))
+          .map((stop) => stop.id);
+      
+        if (toDelete.length > 0) {
+          const { error } = await supabaseUser
+            .from("route_stops")
+            .delete()
+            .eq("route_id", routeId)
+            .in("id", toDelete)
+            .select("id");
+      
+          if (error) {
+            request.log.error({ err: error }, "Failed to delete route stops");
+      
+            return reply.status(500).send({
+              error: "Failed to delete obsolete route stops",
+            });
+          }
+        }
+      
+        return reply.status(200).send({
+          message: "Route stops synchronized successfully",
+          route_id: routeId,
+          stop_count: stops.length,
+        });
+      });
 }
