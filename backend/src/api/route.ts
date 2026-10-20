@@ -504,7 +504,7 @@ export default async function routeAPI(app: FastifyInstance) {
         error: fetchError,
       } = await supabaseUser
         .from("route_stops")
-        .select("id, pickup_id, stop_type, sequence_number, status")
+        .select("id, pickup_id, stop_type, sequence_number")
         .eq("route_id", routeId);
     
       if (fetchError) {
