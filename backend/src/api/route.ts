@@ -377,6 +377,35 @@ export default async function routeAPI(app: FastifyInstance) {
 
 
       app.put("/routes/:routeId/stops", async (request, reply) => {
+        const authHeader = request.headers.authorization;
+
+        if (!authHeader?.startsWith("Bearer ")) {
+          return reply.status(401).send({
+            error: "Missing or invalid authorisation header",
+          });
+        }
+
+        const token = authHeader.substring("Bearer ".length);
+
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
+          return reply.status(401).send({
+            error: "Unauthorised",
+          });
+        }
+
+        const supabaseUser = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_PUBLISHABLE_KEY!,
+          {
+            accessToken: async () => token,
+          }
+        );
+        
         const { routeId } = request.params as {
           routeId: string;
         };
@@ -388,7 +417,7 @@ export default async function routeAPI(app: FastifyInstance) {
         // validate the complete stops array.
         if (!Array.isArray(body?.stops)) {
           return reply.status(400).send({
-            error: "stops must be an array",
+            message: "stops must be an array",
           });
         }
       
@@ -411,7 +440,7 @@ export default async function routeAPI(app: FastifyInstance) {
       
         if (!valid) {
           return reply.status(400).send({
-            error: "Invalid stop data",
+            message: "Invalid stop data",
           });
         }
       
@@ -422,7 +451,7 @@ export default async function routeAPI(app: FastifyInstance) {
       
         if (!sequences.every((seq, index) => seq === index + 1)) {
           return reply.status(400).send({
-            error: "Sequence numbers must be unique and consecutive from 1",
+            message: "Sequence numbers must be unique and consecutive from 1",
           });
         }
       
@@ -438,7 +467,7 @@ export default async function routeAPI(app: FastifyInstance) {
       
           if (types.has(stop.stop_type)) {
             return reply.status(400).send({
-              error: "Duplicate stop for the same pickup and stop type",
+              message: "Duplicate stop for the same pickup and stop type",
             });
           }
       
@@ -448,7 +477,7 @@ export default async function routeAPI(app: FastifyInstance) {
         for (const types of typesByPickup.values()) {
           if (!types.has("pickup") || !types.has("dropoff")) {
             return reply.status(400).send({
-              error: "Each pickup must have both pickup and dropoff stops",
+              message: "Each pickup must have both pickup and dropoff stops",
             });
           }
         }
@@ -466,7 +495,7 @@ export default async function routeAPI(app: FastifyInstance) {
           request.log.error({ err: fetchError }, "Failed to fetch route stops");
       
           return reply.status(500).send({
-            error: "Failed to retrieve route stops",
+            message: "Failed to retrieve route stops",
           });
         }
       
@@ -484,7 +513,7 @@ export default async function routeAPI(app: FastifyInstance) {
       
         if (incomingKeys.size !== stops.length) {
           return reply.status(400).send({
-            error: "Duplicate stops are not allowed",
+            message: "Duplicate stops are not allowed",
           });
         }
       
@@ -518,10 +547,10 @@ export default async function routeAPI(app: FastifyInstance) {
             .insert(toInsert);
       
           if (error) {
-            request.log.error({ err: error }, "Failed to insert route stops");
+            request.log.error({ message: error }, "Failed to insert route stops");
       
             return reply.status(500).send({
-              error: "Failed to insert new route stops",
+              message: "Failed to insert new route stops",
             });
           }
         }
@@ -543,7 +572,7 @@ export default async function routeAPI(app: FastifyInstance) {
             );
       
             return reply.status(500).send({
-              error: "Failed to update route stop",
+              message: "Failed to update route stop",
             });
           }
         }
@@ -565,7 +594,7 @@ export default async function routeAPI(app: FastifyInstance) {
             request.log.error({ err: error }, "Failed to delete route stops");
       
             return reply.status(500).send({
-              error: "Failed to delete obsolete route stops",
+              message: "Failed to delete obsolete route stops",
             });
           }
         }
