@@ -133,7 +133,7 @@ export default async function routeAPI(app: FastifyInstance) {
     const {
       data: updatedRoute,
       error: updateError,
-    } = await supabase
+    } = await supabaseUser
       .from("routes")
       .update({
         status: "active",
