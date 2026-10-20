@@ -11,6 +11,8 @@ export type TripStop = {
   id: string;
   /** The run (backend item) this stop belongs to — every run has a pickup and a drop-off stop. */
   taskId: string;
+  /** The backend pickup this stop belongs to (both of a run's stops share it). */
+  pickupId?: string;
   /** Null when the backend didn't send it — use stopTitle() for a heading. */
   org: string | null;
   address: string;

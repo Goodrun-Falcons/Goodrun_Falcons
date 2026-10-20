@@ -161,8 +161,8 @@ export default function NearbyScreen() {
     if (!canAcceptMore || acceptingId) return;
     setAcceptingId(task.id);
     try {
-      await api.acceptRequest(task.id);
-      acceptTask(task);
+      const pickup = await api.acceptRequest(task.id);
+      acceptTask({ ...task, pickupId: pickup.id });
     } catch (e) {
       // 401 already sends the volunteer back to login (see apiFetch).
       if (e instanceof ApiError && e.status === 401) return;

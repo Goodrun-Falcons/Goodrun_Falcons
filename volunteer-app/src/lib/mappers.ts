@@ -39,6 +39,8 @@ export function requestToTask(request: ApiRequest): Task {
     pickupAddress: 'Pickup location',
     dropoffAddress: 'Drop-off location',
     pickupCoords: { lat: request.pickup_lat, lng: request.pickup_lng },
+    // Prefer the pickup still in play if a request somehow has more than one.
+    pickupId: (request.pickups?.find((p) => p.status !== 'delivered') ?? request.pickups?.[0])?.id,
     dropoffCoords:
       request.dropoff_lat !== null && request.dropoff_lng !== null
         ? { lat: request.dropoff_lat, lng: request.dropoff_lng }

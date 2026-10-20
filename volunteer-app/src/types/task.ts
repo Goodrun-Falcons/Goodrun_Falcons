@@ -40,4 +40,6 @@ export type Task = {
   etaMinutes?: number;
   /** Drive time from the volunteer's current position to the pickup, in minutes. */
   minutesToPickup?: number;
+  /** The volunteer's pickup for this run, once they've accepted it. */
+  pickupId?: string;
 };

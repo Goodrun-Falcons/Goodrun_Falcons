@@ -1,3 +1,4 @@
+import { ApiRouteStopInput } from '@/types/api';
 import { Task } from '@/types/task';
 import { TripStop } from '@/types/trip';
 
@@ -35,4 +36,22 @@ export function planTripSync(
       )
   );
   return { missing, gone };
+}
+
+/**
+ * The trip's stops, in their current order, as the body of PUT /routes/:routeId/stops.
+ * Null when it can't be sent as-is: a stop without a pickup id (not synced yet), or a run
+ * missing its drop-off — the backend requires both stops for every pickup.
+ */
+export function routeStopsPayload(stops: TripStop[]): ApiRouteStopInput[] | null {
+  if (stops.some((stop) => !stop.pickupId)) return null;
+  const hasBoth = stops.every((stop) =>
+    stops.some((other) => other.taskId === stop.taskId && other.type !== stop.type)
+  );
+  if (!hasBoth) return null;
+  return stops.map((stop, i) => ({
+    pickup_id: stop.pickupId!,
+    stop_type: stop.type,
+    sequence_number: i + 1,
+  }));
 }

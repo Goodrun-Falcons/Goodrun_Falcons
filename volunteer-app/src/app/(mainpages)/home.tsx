@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,10 +19,10 @@ import {
 } from '@/constants/theme';
 import { useTasks } from '@/context/tasks-context';
 import { useTheme } from '@/hooks/use-theme';
+import { api } from '@/lib/api';
 
-// Placeholder until Story 1-4 (auth/profile) supplies the real signed-in volunteer.
-const VOLUNTEER_NAME = 'Alex Rivera';
-
+// Placeholder numbers: the backend has no stats endpoint yet (runs delivered, items
+// moved, distinct orgs). Swap for real values once it does.
 const IMPACT_STATS = [
   { label: 'Runs done', value: '18' },
   { label: 'Items moved', value: '132' },
@@ -43,6 +44,17 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tasks } = useTasks();
+  // The name from the volunteer's profile. Re-read whenever Home is shown, so an edit on
+  // the Profile screen shows up here straight away.
+  const [volunteerName, setVolunteerName] = useState<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      api
+        .getMe()
+        .then((me) => setVolunteerName(me.full_name?.trim() || null))
+        .catch(() => {}); // Keep whatever name is showing; apiFetch logs the failure.
+    }, [])
+  );
   const urgentTasks = tasks.filter((task) => task.urgency === 'urgent');
   // Nearest first. Runs without a distance yet sort last rather than first.
   const urgentCards = [...urgentTasks]
@@ -93,7 +105,8 @@ export default function HomeScreen() {
               {getGreeting()}
             </ThemedText>
             <ThemedText style={styles.greetingName} themeColor="primaryText">
-              {VOLUNTEER_NAME}
+              {/* Blank until loaded (or if the profile has no name), not a made-up one. */}
+              {volunteerName ?? ''}
             </ThemedText>
 
             <Pressable

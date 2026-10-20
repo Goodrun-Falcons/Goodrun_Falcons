@@ -38,6 +38,21 @@ export type ApiRequest = {
   /** No longer selected by GET /requests or /accepted-requests; kept for when it returns. */
   organisations?: { name: string } | null;
   request_items: ApiRequestItem[];
+  /**
+   * Only from GET /accepted-requests: the pickup(s) for this request that the volunteer
+   * can see — normally exactly one, theirs.
+   */
+  pickups?: { id: string; route_id: string | null; status: ApiPickupStatus }[];
+};
+
+/** GET /volunteers/me — the signed-in volunteer. */
+export type ApiVolunteer = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  preferred_package_size: string | null;
+  status: string;
 };
 
 export type ApiPickupStatus = 'assigned' | 'en_route' | 'picked_up' | 'delivered';
@@ -53,6 +68,14 @@ export type ApiPickup = {
   handover_timestamp: string | null;
   started_at: string | null;
   ended_at: string | null;
+};
+
+/** One entry of PUT /routes/:routeId/stops. */
+export type ApiRouteStopInput = {
+  pickup_id: string;
+  stop_type: 'pickup' | 'dropoff';
+  /** 1-based, consecutive across the whole route. */
+  sequence_number: number;
 };
 
 export type ApiRouteStatus = 'planned' | 'active' | 'completed';

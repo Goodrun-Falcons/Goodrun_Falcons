@@ -12,6 +12,7 @@ function taskToStops(task: Task): TripStop[] {
   const pickup: TripStop = {
     id: `${task.id}:pickup`,
     taskId: task.id,
+    pickupId: task.pickupId,
     org: task.orgName,
     address: task.pickupAddress,
     itemType: task.itemType,
@@ -124,9 +125,21 @@ export function TripProvider({ children }: { children: ReactNode }) {
         requestedAt,
         acceptedAt: acceptedAt.current,
       });
-      if (missing.length === 0 && gone.size === 0) return prev;
+      // The backend is the source of truth for pickup ids: fill them in on runs accepted
+      // before ids were known (or fix them if they changed).
+      const pickupIdOf = new Map(tasks.map((task) => [task.id, task.pickupId]));
+      const needsId = (stop: TripStop) => {
+        const id = pickupIdOf.get(stop.taskId);
+        return id !== undefined && id !== stop.pickupId;
+      };
+      if (missing.length === 0 && gone.size === 0 && !prev.some(needsId)) return prev;
+
       gone.forEach((taskId) => acceptedAt.current.delete(taskId));
-      const kept = prev.filter((stop) => !gone.has(stop.taskId));
+      const kept = prev
+        .filter((stop) => !gone.has(stop.taskId))
+        .map((stop) => (needsId(stop) ? { ...stop, pickupId: pickupIdOf.get(stop.taskId) } : stop));
+      // Only reshuffle when the set of runs changed; filling in ids keeps the order.
+      if (missing.length === 0 && gone.size === 0) return kept;
       return arrange([...kept, ...missing.flatMap(taskToStops)]);
     });
   }

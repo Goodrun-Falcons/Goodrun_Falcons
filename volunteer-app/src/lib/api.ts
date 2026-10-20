@@ -1,7 +1,14 @@
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 
-import { ApiPickup, ApiRequest, ApiRoute, ApiRouteWithStops } from '@/types/api';
+import {
+  ApiPickup,
+  ApiRequest,
+  ApiRoute,
+  ApiRouteStopInput,
+  ApiRouteWithStops,
+  ApiVolunteer,
+} from '@/types/api';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://goodrun-backend.onrender.com';
 
@@ -48,16 +55,24 @@ async function clearSession() {
   }
 }
 
-async function apiFetch<T>(path: string, method: 'GET' | 'POST' = 'GET'): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  method: 'GET' | 'POST' | 'PUT' = 'GET',
+  body?: unknown
+): Promise<T> {
   const token = await getAccessToken();
 
   let response: Response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method,
-      // No Content-Type: none of these calls send a body, and the backend (Fastify)
-      // rejects a POST that declares JSON but has an empty body with a 400.
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      // Content-Type only with a body: the backend (Fastify) rejects a request that
+      // declares JSON but has an empty body with a 400.
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, 'NETWORK_ERROR', 'Unable to connect to the server. Please try again.');
@@ -90,6 +105,7 @@ async function apiFetch<T>(path: string, method: 'GET' | 'POST' = 'GET'): Promis
 // Endpoints as in the "GoodRun API" doc. Delivery requests used to be `/items`; the
 // backend renamed them to `/requests` with the new schema.
 export const api = {
+  getMe: () => apiFetch<ApiVolunteer>('/volunteers/me'),
   /** Requests still open for a volunteer to take (status `pending`). */
   getRequests: () => apiFetch<ApiRequest[]>('/requests'),
   /** Fails with 409 once the request is no longer pending (e.g. someone else took it). */
@@ -107,4 +123,14 @@ export const api = {
   endRoute: (routeId: string) =>
     apiFetch<{ message: string; route: ApiRoute }>(`/routes/${routeId}/end`, 'POST'),
   getRoute: (routeId: string) => apiFetch<ApiRouteWithStops>(`/routes/${routeId}`),
+  /**
+   * Replaces the route's stops with `stops`, in order: missing ones are created, moved
+   * ones renumbered, ones left out deleted. Each pickup needs both its pickup and drop-off.
+   */
+  setRouteStops: (routeId: string, stops: ApiRouteStopInput[]) =>
+    apiFetch<{ message: string; route_id: string; stop_count: number }>(
+      `/routes/${routeId}/stops`,
+      'PUT',
+      { stops }
+    ),
 };

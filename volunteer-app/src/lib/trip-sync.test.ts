@@ -1,4 +1,4 @@
-import { planTripSync } from '@/lib/trip-sync';
+import { planTripSync, routeStopsPayload } from '@/lib/trip-sync';
 import { Task } from '@/types/task';
 import { TripStop } from '@/types/trip';
 
@@ -17,9 +17,10 @@ function task(id: string): Task {
   };
 }
 
-function stopsFor(taskId: string, pickupDone = false): TripStop[] {
+function stopsFor(taskId: string, pickupDone = false, pickupId?: string): TripStop[] {
   const base = {
     taskId,
+    pickupId,
     org: null,
     address: '',
     itemType: '',
@@ -60,5 +61,29 @@ describe('planTripSync', () => {
   it('never drops anything once the trip has started', () => {
     const { gone } = planTripSync(stopsFor('b'), [], { ...options, tripStarted: true });
     expect(gone.size).toBe(0);
+  });
+});
+
+describe('routeStopsPayload', () => {
+  it('numbers the stops in their current order', () => {
+    const stops = [
+      stopsFor('a', false, 'p-a')[0],
+      ...stopsFor('b', false, 'p-b'),
+      stopsFor('a', false, 'p-a')[1],
+    ];
+    expect(routeStopsPayload(stops)).toEqual([
+      { pickup_id: 'p-a', stop_type: 'pickup', sequence_number: 1 },
+      { pickup_id: 'p-b', stop_type: 'pickup', sequence_number: 2 },
+      { pickup_id: 'p-b', stop_type: 'dropoff', sequence_number: 3 },
+      { pickup_id: 'p-a', stop_type: 'dropoff', sequence_number: 4 },
+    ]);
+  });
+
+  it('refuses stops without a pickup id', () => {
+    expect(routeStopsPayload(stopsFor('a'))).toBeNull();
+  });
+
+  it('refuses a run with no drop-off stop', () => {
+    expect(routeStopsPayload([stopsFor('a', false, 'p-a')[0]])).toBeNull();
   });
 });

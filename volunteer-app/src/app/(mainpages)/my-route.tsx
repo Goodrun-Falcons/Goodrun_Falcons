@@ -32,6 +32,7 @@ import { openDirections } from '@/lib/directions';
 import { formatDistance, formatDuration } from '@/lib/route-format';
 import { RouteMarker, RouteMarkerStatus } from '@/lib/route-map-html';
 import { distanceKm } from '@/lib/stop-order';
+import { routeStopsPayload } from '@/lib/trip-sync';
 import { stopTitle } from '@/types/trip';
 
 const SHEET_COLLAPSED_RATIO = 0.16;
@@ -128,10 +129,22 @@ export default function MyRouteScreen() {
   // Which trip button's request is in flight, so it can't be tapped twice.
   const [tripBusy, setTripBusy] = useState<'starting' | 'ending' | null>(null);
 
-  // Create the backend route (or reuse one a failed attempt already made), start it,
-  // and only then start the trip here.
+  // Create the backend route (or reuse one a failed attempt already made), save the stop
+  // order to it, start it, and only then start the trip here.
   async function handleStartTrip() {
     if (tripBusy) return;
+    const payload = routeStopsPayload(stops);
+    if (!payload) {
+      // Ids arrive with the next sync; a run without a drop-off can't be routed at all.
+      reloadTasks('background');
+      Alert.alert(
+        "Couldn't start the trip",
+        stops.some((stop) => !stop.pickupId)
+          ? 'Your runs are still syncing. Please try again in a moment.'
+          : 'One of your runs has no drop-off point. Cancel it and try again.'
+      );
+      return;
+    }
     setTripBusy('starting');
     let id = routeId;
     try {
@@ -139,6 +152,9 @@ export default function MyRouteScreen() {
         id = (await api.createRoute()).id;
         setRouteId(id);
       }
+      // Sent before starting, so the route never goes active without its stops. Safe to
+      // repeat on a retry — the backend replaces the stop list with what it's given.
+      await api.setRouteStops(id, payload);
       await api.startRoute(id);
       startTrip();
     } catch (e) {

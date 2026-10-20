@@ -51,6 +51,19 @@ describe('requestToTask', () => {
     );
   });
 
+  it('takes the pickup id from /accepted-requests, preferring one still in play', () => {
+    expect(requestToTask(request()).pickupId).toBeUndefined();
+    const task = requestToTask(
+      request({
+        pickups: [
+          { id: 'old', route_id: null, status: 'delivered' },
+          { id: 'live', route_id: null, status: 'assigned' },
+        ],
+      })
+    );
+    expect(task.pickupId).toBe('live');
+  });
+
   it('falls back for missing org, tag and drop-off', () => {
     const task = requestToTask(
       request({ organisations: null, tag: null, dropoff_lat: null, dropoff_lng: null })
