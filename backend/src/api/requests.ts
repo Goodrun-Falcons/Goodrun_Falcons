@@ -249,6 +249,11 @@ export default async function requestAPI(app: FastifyInstance) {
                 id,
                 item_type,
                 quantity
+              ),
+              pickups (
+                id,
+                route_id,
+                status
               )
           `)
           .eq("status", "accepted")
