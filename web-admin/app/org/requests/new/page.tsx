@@ -77,6 +77,8 @@ export default function NewRequestPage() {
           description: description || null,
           urgency,
           tag: tag || null,
+          pickup_address: pickupAddress.trim(),
+          dropoff_address: dropoffAddress.trim() || null,
           pickup_location: `POINT(${pickup.lng} ${pickup.lat})`,
           dropoff_location: dropoff ? `POINT(${dropoff.lng} ${dropoff.lat})` : null,
         })
