@@ -753,13 +753,19 @@ export default async function requestAPI(app: FastifyInstance) {
         });
       }
 
+      if (!requestId) {
+        return reply.status(409).send({
+          error: "Pickup is not associated with a request",
+        });
+      }
+
       // update request status to "in_transit"
       const {
         error: requestError,
       } = await supabaseUser
         .from("requests")
         .update({status: "in_transit"})
-        .eq("id", requestId)
+        .eq("id", requestId.request_id)
         .maybeSingle();
 
       if (requestError) {
@@ -898,13 +904,19 @@ export default async function requestAPI(app: FastifyInstance) {
         });
       }
 
+      if (!requestId) {
+        return reply.status(409).send({
+          error: "Pickup is not associated with a request",
+        });
+      }
+
       // update request status to "approved"
       const {
         error: requestError,
       } = await supabaseUser
         .from("requests")
         .update({status: "approved"})
-        .eq("id", requestId)
+        .eq("id", requestId.request_id)
         .maybeSingle();
 
       if (requestError) {
@@ -921,7 +933,7 @@ export default async function requestAPI(app: FastifyInstance) {
 
     // POST Pickup end
     // Volunteer ends a specfic pickup
-    app.post("/pickups/:id/start", async (request, reply) => {
+    app.post("/pickups/:id/end", async (request, reply) => {
       const authHeader = request.headers.authorization;
 
       if (!authHeader?.startsWith("Bearer ")) {
@@ -970,6 +982,7 @@ export default async function requestAPI(app: FastifyInstance) {
         });
       }
 
+
       // retrieve corresponding request ID
       const {
         data: requestId,
@@ -988,13 +1001,19 @@ export default async function requestAPI(app: FastifyInstance) {
         });
       }
 
+      if (!requestId) {
+        return reply.status(409).send({
+          error: "Pickup is not associated with a request",
+        });
+      }
+
       // update request status to "delivered"
       const {
         error: requestError,
       } = await supabaseUser
         .from("requests")
         .update({status: "delivered"})
-        .eq("id", requestId)
+        .eq("id", requestId.request_id)
         .maybeSingle();
 
       if (requestError) {
