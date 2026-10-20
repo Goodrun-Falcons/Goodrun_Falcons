@@ -331,10 +331,9 @@ export default async function routeAPI(app: FastifyInstance) {
           current_location,
           started_at,
           ended_at,
-          created_at,
+          created_at
         `)
         .eq("volunteer_id", user.id)
-        .maybeSingle();
 
       if (routeError) {
         request.log.error(routeError);

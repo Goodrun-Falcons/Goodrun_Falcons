@@ -773,6 +773,241 @@ export default async function requestAPI(app: FastifyInstance) {
       return reply.status(200).send({message: "Update successed"});
   });
 
+
+    // POST Pickup picked
+    // Volunteer picked the request items
+    app.post("/pickups/:id/picked", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          error: "Missing or invalid authorisation header",
+        });
+      }
+
+      const token = authHeader.substring("Bearer ".length);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return reply.status(401).send({
+          error: "Unauthorised",
+        });
+      }
+
+      const { id: pickupId } = request.params as { id: string };
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISHABLE_KEY!,
+        {
+          accessToken: async () => token,
+        }
+      );
+
+      // update pickup status to "picked_up"
+      const {
+        error: pickupError,
+      } = await supabaseUser
+        .from("pickups")
+        .update({status: "picked_up"})
+        .eq("id", pickupId)
+        .maybeSingle();
+
+      if (pickupError) {
+        request.log.error(pickupError);
+
+        return reply.status(500).send({
+          message: pickupError,
+        });
+      }
+
+      return reply.status(200).send({message: "Update successed"});
+  });
+
+
+    // POST Pickup cancel
+    // Volunteer cancels a specfic pickup
+    app.post("/pickups/:id/cancel", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          error: "Missing or invalid authorisation header",
+        });
+      }
+
+      const token = authHeader.substring("Bearer ".length);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return reply.status(401).send({
+          error: "Unauthorised",
+        });
+      }
+
+      const { id: pickupId } = request.params as { id: string };
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISHABLE_KEY!,
+        {
+          accessToken: async () => token,
+        }
+      );
+
+      // update pickup status to "assigned"
+      const {
+        error: pickupError,
+      } = await supabaseUser
+        .from("pickups")
+        .update({status: "assigned", started_at: null})
+        .eq("id", pickupId)
+        .maybeSingle();
+
+      if (pickupError) {
+        request.log.error(pickupError);
+
+        return reply.status(500).send({
+          message: pickupError,
+        });
+      }
+
+      // retrieve corresponding request ID
+      const {
+        data: requestId,
+        error: reError
+      } = await supabaseUser
+        .from("pickups")
+        .select("request_id")
+        .eq("id", pickupId)
+        .maybeSingle();
+
+      if (reError) {
+        request.log.error(reError);
+
+        return reply.status(500).send({
+          message: reError,
+        });
+      }
+
+      // update request status to "approved"
+      const {
+        error: requestError,
+      } = await supabaseUser
+        .from("requests")
+        .update({status: "approved"})
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (requestError) {
+        request.log.error(requestError);
+
+        return reply.status(500).send({
+          message: requestError,
+        });
+      }
+
+      return reply.status(200).send({message: "Update successed"});
+  });
+
+
+    // POST Pickup end
+    // Volunteer ends a specfic pickup
+    app.post("/pickups/:id/start", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          error: "Missing or invalid authorisation header",
+        });
+      }
+
+      const token = authHeader.substring("Bearer ".length);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return reply.status(401).send({
+          error: "Unauthorised",
+        });
+      }
+
+      const { id: pickupId } = request.params as { id: string };
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISHABLE_KEY!,
+        {
+          accessToken: async () => token,
+        }
+      );
+
+      // update pickup status to "delivered"
+      const {
+        error: pickupError,
+      } = await supabaseUser
+        .from("pickups")
+        .update({status: "delivered", ended_at: new Date().toISOString()})
+        .eq("id", pickupId)
+        .maybeSingle();
+
+      if (pickupError) {
+        request.log.error(pickupError);
+
+        return reply.status(500).send({
+          message: pickupError,
+        });
+      }
+
+      // retrieve corresponding request ID
+      const {
+        data: requestId,
+        error: reError
+      } = await supabaseUser
+        .from("pickups")
+        .select("request_id")
+        .eq("id", pickupId)
+        .maybeSingle();
+
+      if (reError) {
+        request.log.error(reError);
+
+        return reply.status(500).send({
+          message: reError,
+        });
+      }
+
+      // update request status to "delivered"
+      const {
+        error: requestError,
+      } = await supabaseUser
+        .from("requests")
+        .update({status: "delivered"})
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (requestError) {
+        request.log.error(requestError);
+
+        return reply.status(500).send({
+          message: requestError,
+        });
+      }
+
+      return reply.status(200).send({message: "Update successed"});
+  });
+
     // POST new request
     // Admin create a new request
     app.post("/admin/create-request", async (request, reply) => {
