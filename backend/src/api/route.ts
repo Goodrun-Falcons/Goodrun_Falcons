@@ -223,15 +223,16 @@ export default async function routeAPI(app: FastifyInstance) {
         });
       }
 
+
       // check whether there are stops that are incomplete
       const {
         data: unfinishedStops,
         error: stopsError,
       } = await supabaseUser
-        .from("route_stops")
-        .select("id, sequence_number, status")
+        .from("pickups")
+        .select("status")
         .eq("route_id", routeId)
-        .neq("status", "completed")
+        .neq("status", "delivered")
         .limit(1);
 
       if (stopsError) {
