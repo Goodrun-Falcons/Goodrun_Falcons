@@ -74,7 +74,7 @@ export default async function requestAPI(app: FastifyInstance) {
               quantity
             )
         `)
-        .eq("status", "pending");
+        .eq("status", "approved");
 
     if (error) {
         return reply.status(500).send({
@@ -138,7 +138,7 @@ export default async function requestAPI(app: FastifyInstance) {
         return reply.status(404).send({ error: "Request not found" });
       }
 
-      if (data.status !== "pending") {
+      if (data.status !== "approved") {
         return reply
           .status(409)
           .send({ error: "Request is no longer available" });
@@ -346,14 +346,14 @@ export default async function requestAPI(app: FastifyInstance) {
       }
   
   
-      // update request status to be "pending" after pickup deletion
+      // update request status to be "approved" after pickup deletion
       const {
         data: updatedItem,
         error: updateError,
       } = await supabaseUser
         .from("requests")
         .update({ 
-          status: "pending", 
+          status: "approved", 
           volunteer_id: null,
           accepted_at: null})
         .eq("id", id)
@@ -684,6 +684,95 @@ export default async function requestAPI(app: FastifyInstance) {
     });
 
 
+    // POST Pickup start
+    // Volunteer starts a specfic pickup
+    app.post("/pickups/:id/start", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          error: "Missing or invalid authorisation header",
+        });
+      }
+
+      const token = authHeader.substring("Bearer ".length);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return reply.status(401).send({
+          error: "Unauthorised",
+        });
+      }
+
+      const { id: pickupId } = request.params as { id: string };
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISHABLE_KEY!,
+        {
+          accessToken: async () => token,
+        }
+      );
+
+      // update pickup status to "en_route"
+      const {
+        error: pickupError,
+      } = await supabaseUser
+        .from("pickups")
+        .update({status: "en_route", started_at: new Date().toISOString()})
+        .eq("id", pickupId)
+        .maybeSingle();
+
+      if (pickupError) {
+        request.log.error(pickupError);
+
+        return reply.status(500).send({
+          message: pickupError,
+        });
+      }
+
+      // retrieve corresponding request ID
+      const {
+        data: requestId,
+        error: reError
+      } = await supabaseUser
+        .from("pickups")
+        .select("request_id")
+        .eq("id", pickupId)
+        .maybeSingle();
+
+      if (reError) {
+        request.log.error(reError);
+
+        return reply.status(500).send({
+          message: reError,
+        });
+      }
+
+      // update request status to "in_transit"
+      const {
+        error: requestError,
+      } = await supabaseUser
+        .from("requests")
+        .update({status: "in_transit"})
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (requestError) {
+        request.log.error(requestError);
+
+        return reply.status(500).send({
+          message: requestError,
+        });
+      }
+
+      return reply.status(200).send({message: "Update successed"});
+  });
+
     // POST new request
     // Admin create a new request
     app.post("/admin/create-request", async (request, reply) => {
@@ -764,7 +853,7 @@ export default async function requestAPI(app: FastifyInstance) {
           pickup_location: body.pickup_location,
           dropoff_location: body.dropoff_location,
           urgency: body.urgency ?? "medium",
-          status: "pending",
+          status: "approved",
         })
         .select("id")
         .single();

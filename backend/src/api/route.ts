@@ -16,7 +16,6 @@ export default async function routeAPI(app: FastifyInstance) {
     // POST Route
     // Volunteer creates a new route and mark as planned
     // US 13
-
     app.post("/routes", async (request, reply) => {
     const authHeader = request.headers.authorization;
 
@@ -71,7 +70,7 @@ export default async function routeAPI(app: FastifyInstance) {
     });
 
 
-    // POST Route
+    // POST Route start
     // Volunteer user start the route
     // US 12
     app.post("/routes/:id/start", async (request, reply) => {
@@ -160,7 +159,6 @@ export default async function routeAPI(app: FastifyInstance) {
 
     // POST End Route
     // Volunteer ends their active route
-
     app.post("/routes/:id/end", async (request, reply) => {
       const authHeader = request.headers.authorization;
 
@@ -288,10 +286,69 @@ export default async function routeAPI(app: FastifyInstance) {
     });
 
 
-    
+    // GET Route
+    // Volunteer retrieves all routes belong to them
+    app.get("/routes/:id", async (request, reply) => {
+      const authHeader = request.headers.authorization;
 
-      // GET Route
-      // Volunteer retrieves their route with ordered stops and pickup/item details
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          error: "Missing or invalid authorisation header",
+        });
+      }
+
+      const token = authHeader.substring("Bearer ".length);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return reply.status(401).send({
+          error: "Unauthorised",
+        });
+      }
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISHABLE_KEY!,
+        {
+          accessToken: async () => token,
+        }
+      );
+
+      // retrieve the all routes
+      const {
+        data: route,
+        error: routeError,
+      } = await supabaseUser
+        .from("routes")
+        .select(`
+          id,
+          volunteer_id,
+          status,
+          current_location,
+          started_at,
+          ended_at,
+          created_at,
+        `)
+        .eq("volunteer_id", user.id)
+        .maybeSingle();
+
+      if (routeError) {
+        request.log.error(routeError);
+
+        return reply.status(500).send({
+          error: "Failed to retrieve route",
+        });
+      }
+
+      return reply.status(200).send(route);
+  });
+
+    // GET Route by ID
+    // Volunteer retrieves their route with ordered stops and pickup/item details
     app.get("/routes/:id", async (request, reply) => {
         const authHeader = request.headers.authorization;
 
@@ -324,7 +381,7 @@ export default async function routeAPI(app: FastifyInstance) {
           }
         );
 
-        // retrieve the route and its related stops, pickups and items
+        // retrieve the route and its related stops, pickups and requests
         const {
           data: route,
           error: routeError,
@@ -389,6 +446,8 @@ export default async function routeAPI(app: FastifyInstance) {
     });
 
 
+    // PUT routes
+    // Volunteer updates all stop data that belong to a route
     app.put("/routes/:routeId/stops", async (request, reply) => {
       const authHeader = request.headers.authorization;
 
@@ -769,4 +828,7 @@ export default async function routeAPI(app: FastifyInstance) {
         stop_count: stops.length,
       });
     });
+
+
+    
 }
