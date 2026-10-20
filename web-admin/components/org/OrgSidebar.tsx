@@ -70,7 +70,7 @@ const NAV_ITEMS = [
   { href: "/org/requests", label: "My Requests", icon: ListIcon },
 ];
 
-export function OrgSidebar() {
+export function OrgSidebar({ orgName }: { orgName: string }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -82,14 +82,18 @@ export function OrgSidebar() {
   return (
     <div className="fixed left-0 top-0 flex h-screen w-[280px] flex-col justify-between bg-[#11183c] py-4">
       <div className="flex h-[81px] items-center px-6">
-        <div className="flex items-center gap-4">
-          <div className="flex h-10 w-[38px] items-center justify-center rounded-full bg-[#b9100b]">
-            <span className="text-[20px] font-bold leading-[28px] text-white">M</span>
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-10 w-[38px] shrink-0 items-center justify-center rounded-full bg-[#b9100b]">
+            <span className="text-[20px] font-bold leading-[28px] text-white">
+              {orgName.charAt(0).toUpperCase()}
+            </span>
           </div>
-          <div className="text-[24px] font-extrabold leading-[32px] text-white">
-            <p>Logistics</p>
-            <p>Portal</p>
-          </div>
+          <p
+            title={orgName}
+            className="line-clamp-2 min-w-0 break-words text-[20px] font-extrabold leading-[26px] text-white"
+          >
+            {orgName}
+          </p>
         </div>
       </div>
 
