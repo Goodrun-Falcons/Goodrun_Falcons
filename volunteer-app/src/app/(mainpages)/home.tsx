@@ -42,7 +42,7 @@ export default function HomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const tasks = useTasks();
+  const { tasks } = useTasks();
   const urgentTasks = tasks.filter((task) => task.urgency === 'urgent');
   // Nearest first. Runs without a distance yet sort last rather than first.
   const urgentCards = [...urgentTasks]

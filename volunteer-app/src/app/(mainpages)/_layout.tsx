@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import NavigationBar, { NAVIGATION_HEIGHT } from '@/components/navi-bar';
+import { TasksProvider } from '@/context/tasks-context';
 import { Colors, Spacing } from '@/constants/theme';
 
 export default function NavigationLayout() {
@@ -32,28 +33,32 @@ export default function NavigationLayout() {
 
   const bottomSpace = keyboardVisible ? 0 : NAVIGATION_HEIGHT + bottomGap + Spacing.xs;
 
+  // Runs are loaded here rather than at the root so the first GET /requests happens
+  // after login, when there's a token to send.
   return (
-    <View style={styles.container}>
-      <View style={[styles.pages, { paddingBottom: bottomSpace }]}>
-        <Stack screenOptions={{ headerShown: false }} />
-      </View>
-
-      {!keyboardVisible && (
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.navigation,
-            {
-              bottom: bottomGap,
-              left: Math.max(insets.left, Spacing.md),
-              right: Math.max(insets.right, Spacing.md),
-            },
-          ]}
-        >
-          <NavigationBar />
+    <TasksProvider>
+      <View style={styles.container}>
+        <View style={[styles.pages, { paddingBottom: bottomSpace }]}>
+          <Stack screenOptions={{ headerShown: false }} />
         </View>
-      )}
-    </View>
+
+        {!keyboardVisible && (
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.navigation,
+              {
+                bottom: bottomGap,
+                left: Math.max(insets.left, Spacing.md),
+                right: Math.max(insets.right, Spacing.md),
+              },
+            ]}
+          >
+            <NavigationBar />
+          </View>
+        )}
+      </View>
+    </TasksProvider>
   );
 }
 

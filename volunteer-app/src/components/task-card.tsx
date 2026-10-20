@@ -57,9 +57,11 @@ export function TaskCard({
         </View>
       </View>
 
-      <ThemedText style={styles.orgName} themeColor="ink">
-        {task.orgName}
-      </ThemedText>
+      {task.orgName && (
+        <ThemedText style={styles.orgName} themeColor="ink">
+          {task.orgName}
+        </ThemedText>
+      )}
       <ThemedText style={styles.itemSummary} themeColor="body">
         {task.itemSummary}
       </ThemedText>

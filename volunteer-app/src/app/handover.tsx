@@ -117,7 +117,7 @@ export default function HandoverScreen() {
           Photo recorded · {capturedAt ? formatTime(capturedAt) : ''}
         </ThemedText>
         <ThemedText style={styles.doneBody} themeColor="mute">
-          {stop.org} has been notified.
+          {stop.org ?? 'The organisation'} has been notified.
         </ThemedText>
         <Pressable
           onPress={() => router.back()}
@@ -149,7 +149,7 @@ export default function HandoverScreen() {
           </ThemedText>
         </View>
         <ThemedText style={styles.headerSubtitle} themeColor="primaryText">
-          {stop.org} · {stop.item}
+          {[stop.org, stop.item].filter(Boolean).join(' · ')}
         </ThemedText>
       </View>
 

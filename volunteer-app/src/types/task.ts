@@ -17,7 +17,11 @@ export type Coordinates = {
 /** UI-facing run. Built from a backend item by src/lib/mappers.ts. */
 export type Task = {
   id: string;
-  orgName: string;
+  /**
+   * Null when the backend doesn't send it — GET /requests currently returns no org for
+   * volunteers (RLS on `organisations`). Screens leave it out rather than show a placeholder.
+   */
+  orgName: string | null;
   /** The backend's `item_type`, e.g. "wheelchair". */
   itemType: string;
   itemSummary: string;

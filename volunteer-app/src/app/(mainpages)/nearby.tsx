@@ -1,8 +1,16 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +34,7 @@ import { useTasks } from '@/context/tasks-context';
 import { useTrip } from '@/context/trip-context';
 import { useAreaName } from '@/hooks/use-area-name';
 import { useTheme } from '@/hooks/use-theme';
+import { api, ApiError, describeApiError } from '@/lib/api';
 import { MAX_RUNS_PER_TRIP } from '@/lib/stop-order';
 import { Task, TaskTeam } from '@/types/task';
 
@@ -33,6 +42,9 @@ const SHEET_COLLAPSED_RATIO = 0.16;
 const SHEET_DEFAULT_RATIO = 0.46;
 const SHEET_EXPANDED_RATIO = 0.88;
 const FLING_VELOCITY_THRESHOLD = 500;
+// How often the list is re-fetched while Nearby is on screen, so runs other volunteers
+// take (or orgs add) show up without pulling to refresh.
+const AUTO_REFRESH_MS = 30_000;
 
 const RADIUS_OPTIONS: { label: string; km: number | null }[] = [
   { label: '5 km', km: 5 },
@@ -72,7 +84,24 @@ export default function NearbyScreen() {
   const [mapAreaHeight, setMapAreaHeight] = useState(windowHeight);
   const listRef = useRef<FlatList<Task>>(null);
 
-  const allTasks = useTasks();
+  const { tasks: allTasks, loading, refreshing, error, reload } = useTasks();
+  // The run whose Accept request is in flight, so its button can't be tapped twice.
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
+  // Refresh quietly every minute while this screen is focused; the timer stops when
+  // the volunteer switches tab. The callback must stay stable — GPS fixes re-render
+  // this screen every few metres, and re-running it would keep restarting the timer —
+  // so it reaches the latest `reload` through a ref.
+  const reloadRef = useRef(reload);
+  useEffect(() => {
+    reloadRef.current = reload;
+  });
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setInterval(() => reloadRef.current('background'), AUTO_REFRESH_MS);
+      return () => clearInterval(timer);
+    }, [])
+  );
   const tasks = allTasks
     .filter((task) => radiusKm === null || (task.distanceKm ?? 0) <= radiusKm)
     .filter((task) => team === null || task.team === team)
@@ -82,7 +111,8 @@ export default function NearbyScreen() {
   // (and clearing a team filter that excludes it) so it isn't hidden. Adjusted during render (React's pattern for responding to a
   // changed input) so the first paint already has the right filter and outline.
   const [handledHighlight, setHandledHighlight] = useState<string | undefined>();
-  if (highlight && highlight !== handledHighlight) {
+  // Waits for the first load, or a run that's on its way would look missing.
+  if (highlight && highlight !== handledHighlight && !loading) {
     setHandledHighlight(highlight);
     const target = allTasks.find((task) => task.id === highlight);
     if (target) {
@@ -125,6 +155,29 @@ export default function NearbyScreen() {
 
   const sheetHeight = useSharedValue(defaultHeight);
   const dragStartHeight = useSharedValue(defaultHeight);
+
+  // The backend creates the pickup first; only then does the run join the local trip.
+  async function handleAccept(task: Task) {
+    if (!canAcceptMore || acceptingId) return;
+    setAcceptingId(task.id);
+    try {
+      await api.acceptRequest(task.id);
+      acceptTask(task);
+    } catch (e) {
+      // 401 already sends the volunteer back to login (see apiFetch).
+      if (e instanceof ApiError && e.status === 401) return;
+      if (e instanceof ApiError && (e.status === 404 || e.status === 409)) {
+        Alert.alert('Run no longer available', 'Someone else may have taken it already.');
+      } else {
+        Alert.alert("Couldn't accept this run", describeApiError(e));
+      }
+      // Whatever went wrong, the backend may have half-done it (e.g. created the pickup
+      // but not marked the request) — re-read both lists so the screen shows what's true.
+      reload('background');
+    } finally {
+      setAcceptingId(null);
+    }
+  }
 
   function handleMarkerPress(taskId: string) {
     const index = tasks.findIndex((task) => task.id === taskId);
@@ -265,9 +318,13 @@ export default function NearbyScreen() {
                   task={item}
                   accepted={isAccepted(item.id)}
                   acceptBlockedReason={
-                    canAcceptMore ? undefined : `Trip full · ${MAX_RUNS_PER_TRIP} runs max`
+                    acceptingId === item.id
+                      ? 'Accepting…'
+                      : canAcceptMore
+                        ? undefined
+                        : `Trip full · ${MAX_RUNS_PER_TRIP} runs max`
                   }
-                  onAccept={() => acceptTask(item)}
+                  onAccept={() => handleAccept(item)}
                   highlighted={item.id === highlightedTaskId}
                 />
               )}
@@ -278,12 +335,29 @@ export default function NearbyScreen() {
                 }, 100);
               }}
               contentContainerStyle={styles.listContent}
+              refreshing={refreshing}
+              onRefresh={reload}
+              // A failed refresh keeps the last list; say so above it.
+              ListHeaderComponent={
+                error && allTasks.length > 0 ? (
+                  <ThemedText style={styles.errorBanner} themeColor="primary">
+                    {error}
+                  </ThemedText>
+                ) : null
+              }
               ListEmptyComponent={
-                <ThemedText style={styles.emptyState} themeColor="mute">
-                  {team === null
-                    ? 'No runs within this radius — try widening your search.'
-                    : 'No runs for this team within this radius — try another team or a wider radius.'}
-                </ThemedText>
+                loading ? (
+                  <ActivityIndicator style={styles.loading} color={theme.primary} />
+                ) : (
+                  <ThemedText style={styles.emptyState} themeColor="mute">
+                    {error ??
+                      (allTasks.length === 0
+                        ? 'No runs available right now. Pull down to refresh.'
+                        : team === null
+                          ? 'No runs within this radius — try widening your search.'
+                          : 'No runs for this team within this radius — try another team or a wider radius.')}
+                  </ThemedText>
+                )
               }
             />
           </Animated.View>
@@ -405,6 +479,14 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: Spacing.sm,
+  },
+  loading: {
+    paddingTop: Spacing.xxxl,
+  },
+  errorBanner: {
+    ...Typography.caption,
+    textAlign: 'center',
+    paddingBottom: Spacing.sm,
   },
   emptyState: {
     ...Typography.bodyMd,
