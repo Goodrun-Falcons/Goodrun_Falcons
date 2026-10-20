@@ -286,9 +286,9 @@ export default async function routeAPI(app: FastifyInstance) {
     });
 
 
-    // GET Route
+    // GET Route 
     // Volunteer retrieves all routes belong to them
-    app.get("/routes/:id", async (request, reply) => {
+    app.get("/routes", async (request, reply) => {
       const authHeader = request.headers.authorization;
 
       if (!authHeader?.startsWith("Bearer ")) {
