@@ -33,7 +33,21 @@
           "imageWidth": 76
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Goodrun uses your location to show nearby pickups and guide you along your route."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Goodrun needs camera access so you can photograph items during pickup handover.",
+          "photosPermission": "Goodrun needs photo library access so you can choose an item photo during pickup handover."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

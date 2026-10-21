@@ -1,0 +1,1 @@
+cd volunteer-app && npx lint-staged

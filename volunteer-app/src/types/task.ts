@@ -1,0 +1,47 @@
+export type TaskUrgency = 'urgent' | 'soon' | 'flexible';
+
+/** Internal team a run belongs to — see src/lib/teams.ts for labels. */
+export type TaskTeam =
+  | 'animal_welfare'
+  | 'donations'
+  | 'education'
+  | 'funders_and_grants'
+  | 'humanitarian_aid'
+  | 'innovation';
+
+export type Coordinates = {
+  lat: number;
+  lng: number;
+};
+
+/** UI-facing run. Built from a backend item by src/lib/mappers.ts. */
+export type Task = {
+  id: string;
+  /**
+   * Null when the backend doesn't send it — GET /requests currently returns no org for
+   * volunteers (RLS on `organisations`). Screens leave it out rather than show a placeholder.
+   */
+  orgName: string | null;
+  /** The backend's `item_type`, e.g. "wheelchair". */
+  itemType: string;
+  itemSummary: string;
+  urgency: TaskUrgency;
+  team: TaskTeam;
+  /** ISO date (yyyy-mm-dd) the item needs to be moved by. Not in the backend yet. */
+  dueBy?: string;
+  /** The backend's `total_package_size`, e.g. "small". Absent on older rows. */
+  packageSize?: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  pickupCoords: Coordinates;
+  /** Null when the backend item has no drop-off point. */
+  dropoffCoords: Coordinates | null;
+  /** Computed by the backend from the volunteer's location. Absent until that exists. */
+  distanceKm?: number;
+  /** Estimated drive time from pickup to drop-off, in minutes. */
+  etaMinutes?: number;
+  /** Drive time from the volunteer's current position to the pickup, in minutes. */
+  minutesToPickup?: number;
+  /** The volunteer's pickup for this run, once they've accepted it. */
+  pickupId?: string;
+};
