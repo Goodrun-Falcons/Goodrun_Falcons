@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../supabase/types";
-import { formatItemsLabel, type RequestItem } from "@/lib/requestItems";
+import { requestLabel, type RequestItem } from "@/lib/requestItems";
 
 type Request = Database["public"]["Tables"]["requests"]["Row"] & {
   request_items: RequestItem[];
@@ -44,6 +44,7 @@ function statusBadge(status: string) {
     pending: { bg: "#e7e8e9", text: "#46464e", label: "Pending" },
     approved: { bg: "#e7e8e9", text: "#46464e", label: "Approved" },
     rejected: { bg: "#ffdad6", text: "#93000a", label: "Rejected" },
+    cancelled: { bg: "#e7e8e9", text: "#6b7280", label: "Cancelled" },
     accepted: { bg: "#e7e8e9", text: "#46464e", label: "Matched" },
     in_transit: { bg: "#dd3022", text: "#ffffff", label: "In Transit" },
     delivered: { bg: "#d8f6e3", text: "#0f5132", label: "Delivered" },
@@ -168,7 +169,7 @@ export default function OrgDashboardPage() {
                   {statusBadge(request.status)}
                 </div>
                 <h4 className="pt-1 text-[20px] font-semibold text-[#191c1d]">
-                  {formatItemsLabel(request.request_items)}
+                  {requestLabel(request)}
                 </h4>
                 {request.description && <p className="text-[16px] text-[#46464e]">{request.description}</p>}
               </div>

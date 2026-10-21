@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { TAG_OPTIONS, tagLabel, type Tag } from "@/lib/tags";
 import { geocodeAddress } from "@/lib/geocode";
+import { HandoverProof } from "@/components/HandoverProof";
 
 // ─── DB types ─────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,7 @@ type DbStatus =
   | "pending"
   | "approved"
   | "rejected"
+  | "cancelled"
   | "accepted"
   | "in_transit"
   | "delivered";
@@ -32,6 +34,7 @@ interface Pickup {
 
 interface Request {
   id: string;
+  name: string | null;
   status: DbStatus;
   tag: Tag | null;
   description: string | null;
@@ -41,6 +44,12 @@ interface Request {
   organisations: { name: string } | null;
   request_items: RequestItem[];
   pickups: Pickup[];
+}
+
+interface VolunteerOption {
+  id: string;
+  full_name: string | null;
+  email: string;
 }
 
 interface OrgOption {
@@ -64,9 +73,9 @@ function shortId(uuid: string): string {
 }
 
 function requestTitle(req: Request): string {
-  const items = req.request_items.map((i) => i.item_type).join(", ");
   const org = req.organisations?.name ?? "Unknown Org";
-  return items ? `${items} — ${org}` : org;
+  const label = req.name?.trim() || req.request_items.map((i) => i.item_type).join(", ");
+  return label ? `${label} — ${org}` : org;
 }
 
 function nameInitials(name: string | null): string {
@@ -157,6 +166,12 @@ const STATUS_CONFIG: Record<DbStatus, { dot: string; bg: string; text: string; l
     bg: "bg-[rgba(185,16,11,0.1)]",
     text: "text-[#B9100B]",
     label: "Rejected",
+  },
+  cancelled: {
+    dot: "bg-[#6B7280]",
+    bg: "bg-[rgba(107,114,128,0.1)]",
+    text: "text-[#6B7280]",
+    label: "Cancelled",
   },
   accepted: {
     dot: "bg-[#11183C]",
@@ -536,8 +551,12 @@ function DeliveryDetailModal({
   onApprove,
   onReject,
   onTagChange,
+  volunteers,
+  onAssign,
 }: Readonly<{
   req: Request;
+  volunteers: VolunteerOption[];
+  onAssign: (id: string, volunteerId: string) => Promise<void>;
   onClose: () => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string) => Promise<void>;
@@ -546,6 +565,7 @@ function DeliveryDetailModal({
   const [localTag, setLocalTag] = useState<Tag | null>(req.tag);
   const [tagDirty, setTagDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [volunteerId, setVolunteerId] = useState("");
 
   const driver = driverForRequest(req);
   const isPending = req.status === "pending";
@@ -563,6 +583,14 @@ function DeliveryDetailModal({
   async function handleReject() {
     setSaving(true);
     await onReject(req.id);
+    setSaving(false);
+    onClose();
+  }
+
+  async function handleAssign() {
+    if (!volunteerId) return;
+    setSaving(true);
+    await onAssign(req.id, volunteerId);
     setSaving(false);
     onClose();
   }
@@ -666,6 +694,39 @@ function DeliveryDetailModal({
               </div>
             </div>
           )}
+
+          {/* Assign volunteer (approved, not yet taken) */}
+          {req.status === "approved" && (
+            <div className="flex flex-col gap-1.5">
+              <span className={labelClass}>Assign Volunteer</span>
+              <div className="flex gap-2">
+                <select
+                  value={volunteerId}
+                  onChange={(e) => setVolunteerId(e.target.value)}
+                  className="h-10 min-w-0 flex-1 rounded-lg px-3 text-[13px] text-[#1B1B22] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
+                  style={inputStyle}
+                >
+                  <option value="">Leave open for volunteers to accept</option>
+                  {volunteers.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.full_name ?? v.email}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAssign}
+                  disabled={saving || !volunteerId}
+                  className="flex h-10 items-center rounded-lg bg-[#11183C] px-5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  Assign
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Proof of delivery */}
+          {req.status === "delivered" && <HandoverProof requestId={req.id} />}
 
           {/* Tag */}
           <div className="flex flex-col gap-1.5">
@@ -845,7 +906,7 @@ function NewDeliveryModal({
 
           {/* Title / Item */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="new-title" className={labelClass}>Delivery Item</label>
+            <label htmlFor="new-title" className={labelClass}>Request Name</label>
             <input
               id="new-title"
               type="text"
@@ -948,6 +1009,7 @@ function EmptyState({ label }: Readonly<{ label: string }>) {
 export default function DeliveriesPage() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
+  const [volunteers, setVolunteers] = useState<VolunteerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
@@ -959,11 +1021,11 @@ export default function DeliveriesPage() {
   const [completedOpen, setCompletedOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const [{ data: reqData }, { data: orgData }] = await Promise.all([
+    const [{ data: reqData }, { data: orgData }, { data: volData }] = await Promise.all([
       supabase
         .from("requests")
         .select(
-          `id, status, tag, description, urgency, created_at, created_by_admin,
+          `id, name, status, tag, description, urgency, created_at, created_by_admin,
            organisations(name),
            request_items(item_type, quantity),
            pickups(volunteers(full_name))`
@@ -974,10 +1036,16 @@ export default function DeliveriesPage() {
         .select("id, name")
         .eq("active", true)
         .order("name"),
+      supabase
+        .from("volunteers")
+        .select("id, full_name, email")
+        .eq("status", "active")
+        .order("full_name"),
     ]);
 
     if (reqData) setRequests(reqData as unknown as Request[]);
     if (orgData) setOrgs(orgData as OrgOption[]);
+    if (volData) setVolunteers(volData as VolunteerOption[]);
     setLoading(false);
   }, []);
 
@@ -995,6 +1063,15 @@ export default function DeliveriesPage() {
     const { error } = await supabase.from("requests").update({ status: "rejected" }).eq("id", id);
     if (error) { alert("Failed to reject: " + error.message); return; }
     setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r)));
+  }
+
+  async function handleAssign(id: string, volunteerId: string) {
+    const { error } = await supabase.rpc("admin_assign_volunteer", {
+      p_request_id: id,
+      p_volunteer_id: volunteerId,
+    });
+    if (error) { alert("Failed to assign volunteer: " + error.message); }
+    await load();
   }
 
   async function handleTagChange(id: string, tag: Tag | null) {
@@ -1016,6 +1093,7 @@ export default function DeliveriesPage() {
       .from("requests")
       .insert({
         organisation_id: form.orgId,
+        name: form.title.trim(),
         description: form.description || null,
         urgency: form.urgent ? "high" : "medium",
         status: "pending",
@@ -1244,6 +1322,8 @@ export default function DeliveriesPage() {
           onApprove={handleApprove}
           onReject={handleReject}
           onTagChange={handleTagChange}
+          volunteers={volunteers}
+          onAssign={handleAssign}
         />
       )}
     </div>

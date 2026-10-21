@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       admins: {
@@ -32,6 +57,39 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          link: string | null
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -58,7 +116,7 @@ export type Database = {
           email: string
           id: string
           location?: unknown
-          name?: string
+          name: string
           phone?: string | null
           security_answer_1_hash?: string | null
           security_answer_2_hash?: string | null
@@ -88,7 +146,7 @@ export type Database = {
           assigned_by: string | null
           created_at: string
           ended_at: string | null
-          handover_photo_url: string | null
+          handover_photo: string | null
           handover_timestamp: string | null
           id: string
           request_id: string
@@ -101,7 +159,7 @@ export type Database = {
           assigned_by?: string | null
           created_at?: string
           ended_at?: string | null
-          handover_photo_url?: string | null
+          handover_photo?: string | null
           handover_timestamp?: string | null
           id?: string
           request_id: string
@@ -114,7 +172,7 @@ export type Database = {
           assigned_by?: string | null
           created_at?: string
           ended_at?: string | null
-          handover_photo_url?: string | null
+          handover_photo?: string | null
           handover_timestamp?: string | null
           id?: string
           request_id?: string
@@ -192,18 +250,20 @@ export type Database = {
           created_at: string
           created_by_admin: boolean
           description: string | null
+          dropoff_address: string | null
           dropoff_lat: number | null
           dropoff_lng: number | null
-          dropoff_address: string | null
           dropoff_location: unknown
           id: string
+          name: string | null
           organisation_id: string
+          pickup_address: string | null
           pickup_lat: number | null
           pickup_lng: number | null
-          pickup_address: string | null
           pickup_location: unknown
           status: string
           tag: string | null
+          total_package_size: string
           urgency: string
           volunteer_id: string | null
         }
@@ -212,18 +272,20 @@ export type Database = {
           created_at?: string
           created_by_admin?: boolean
           description?: string | null
+          dropoff_address?: string | null
           dropoff_lat?: number | null
           dropoff_lng?: number | null
-          dropoff_address?: string | null
           dropoff_location?: unknown
           id?: string
+          name?: string | null
           organisation_id: string
+          pickup_address?: string | null
           pickup_lat?: number | null
           pickup_lng?: number | null
-          pickup_address?: string | null
           pickup_location: unknown
           status?: string
           tag?: string | null
+          total_package_size?: string
           urgency?: string
           volunteer_id?: string | null
         }
@@ -232,18 +294,20 @@ export type Database = {
           created_at?: string
           created_by_admin?: boolean
           description?: string | null
+          dropoff_address?: string | null
           dropoff_lat?: number | null
           dropoff_lng?: number | null
-          dropoff_address?: string | null
           dropoff_location?: unknown
           id?: string
+          name?: string | null
           organisation_id?: string
+          pickup_address?: string | null
           pickup_lat?: number | null
           pickup_lng?: number | null
-          pickup_address?: string | null
           pickup_location?: unknown
           status?: string
           tag?: string | null
+          total_package_size?: string
           urgency?: string
           volunteer_id?: string | null
         }
@@ -267,26 +331,23 @@ export type Database = {
       route_stops: {
         Row: {
           id: string
-          pickup_id: string | null
+          pickup_id: string
           route_id: string
           sequence_number: number
-          status: string
           stop_type: string
         }
         Insert: {
           id?: string
-          pickup_id?: string | null
+          pickup_id: string
           route_id?: string
           sequence_number: number
-          status: string
           stop_type?: string
         }
         Update: {
           id?: string
-          pickup_id?: string | null
+          pickup_id?: string
           route_id?: string
           sequence_number?: number
-          status?: string
           stop_type?: string
         }
         Relationships: [
@@ -359,6 +420,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           security_answer_1_hash: string | null
@@ -375,6 +437,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           security_answer_1_hash?: string | null
@@ -391,6 +454,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           security_answer_1_hash?: string | null
@@ -449,25 +513,31 @@ export type Database = {
           created_at: string
           id: string
           message: string
-          organisation_id: string
+          organisation_id: string | null
           status: string
           subject: string
+          ticket_number: number
+          volunteer_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           message: string
-          organisation_id: string
+          organisation_id?: string | null
           status?: string
           subject: string
+          ticket_number?: number
+          volunteer_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           message?: string
-          organisation_id?: string
+          organisation_id?: string | null
           status?: string
           subject?: string
+          ticket_number?: number
+          volunteer_id?: string | null
         }
         Relationships: [
           {
@@ -475,6 +545,13 @@ export type Database = {
             columns: ["organisation_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
             referencedColumns: ["id"]
           },
         ]
@@ -492,7 +569,7 @@ export type Database = {
           security_answer_one: string | null
           security_answer_two: string | null
           security_question_one: string | null
-          secutriy_question_two: string | null
+          security_question_two: string | null
           service_area: unknown
           status: string
           vehicle_type: string | null
@@ -509,7 +586,7 @@ export type Database = {
           security_answer_one?: string | null
           security_answer_two?: string | null
           security_question_one?: string | null
-          secutriy_question_two?: string | null
+          security_question_two?: string | null
           service_area?: unknown
           status?: string
           vehicle_type?: string | null
@@ -526,7 +603,7 @@ export type Database = {
           security_answer_one?: string | null
           security_answer_two?: string | null
           security_question_one?: string | null
-          secutriy_question_two?: string | null
+          security_question_two?: string | null
           service_area?: unknown
           status?: string
           vehicle_type?: string | null
@@ -538,7 +615,78 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_assign_volunteer: {
+        Args: { p_request_id: string; p_volunteer_id: string }
+        Returns: undefined
+      }
+      approve_signup_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      assert_active_org: { Args: never; Returns: undefined }
+      cancel_request: { Args: { p_request_id: string }; Returns: undefined }
+      create_request: {
+        Args: {
+          p_description: string
+          p_dropoff_address: string
+          p_dropoff_lat: number
+          p_dropoff_lng: number
+          p_items: Json
+          p_name: string
+          p_pickup_address: string
+          p_pickup_lat: number
+          p_pickup_lng: number
+          p_tag: string
+          p_urgency: string
+        }
+        Returns: string
+      }
+      insert_request_items: {
+        Args: { p_items: Json; p_request_id: string }
+        Returns: undefined
+      }
+      notify_admins: {
+        Args: {
+          p_body: string
+          p_link: string
+          p_title: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      notify_user: {
+        Args: {
+          p_body: string
+          p_link: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      reject_signup_request: {
+        Args: { p_reason?: string; p_request_id: string }
+        Returns: undefined
+      }
+      request_label: { Args: { p_request_id: string }; Returns: string }
+      ticket_label: { Args: { n: number }; Returns: string }
+      update_pending_request: {
+        Args: {
+          p_description: string
+          p_dropoff_address: string
+          p_dropoff_lat: number
+          p_dropoff_lng: number
+          p_items: Json
+          p_name: string
+          p_pickup_address: string
+          p_pickup_lat: number
+          p_pickup_lng: number
+          p_request_id: string
+          p_tag: string
+          p_urgency: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
@@ -667,6 +815,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

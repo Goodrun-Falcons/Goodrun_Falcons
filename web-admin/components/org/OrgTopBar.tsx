@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { NotificationsBell } from "./NotificationsBell";
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 export function OrgTopBar({ orgName }: { orgName: string }) {
   return (

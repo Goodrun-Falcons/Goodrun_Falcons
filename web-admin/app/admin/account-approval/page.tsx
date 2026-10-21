@@ -176,38 +176,12 @@ export default function AccountApprovalPage() {
   async function handleApprove(req: SignupRequest) {
     setActionLoading(req.id);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Insert org row — id must equal auth_user_id so org layout's auth.uid() lookup works
-      const { error: insertErr } = await supabase.from("organisations").upsert({
-        id: req.auth_user_id,
-        name: req.name,
-        email: req.email,
-        phone: req.phone,
-        address: req.address,
-        verified: true,
-        active: true,
+      const { error } = await supabase.rpc("approve_signup_request", {
+        p_request_id: req.id,
       });
 
-      if (insertErr) {
-        alert("Failed to create organisation: " + insertErr.message);
-        return;
-      }
-
-      const { error: updateErr } = await supabase
-        .from("signup_requests")
-        .update({
-          status: "approved",
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq("id", req.id);
-
-      if (updateErr) {
-        alert("Failed to update signup request: " + updateErr.message);
+      if (error) {
+        alert("Failed to approve signup request: " + error.message);
         return;
       }
 
@@ -218,21 +192,18 @@ export default function AccountApprovalPage() {
   }
 
   async function handleReject(req: SignupRequest) {
+    const reason = window.prompt(
+      `Reject ${req.name}? Optionally give a reason - the organisation will see it when they try to log in.`,
+      ""
+    );
+    if (reason === null) return;
+
     setActionLoading(req.id);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("signup_requests")
-        .update({
-          status: "rejected",
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq("id", req.id);
+      const { error } = await supabase.rpc("reject_signup_request", {
+        p_request_id: req.id,
+        p_reason: reason,
+      });
 
       if (error) {
         alert("Failed to reject signup request: " + error.message);

@@ -6,8 +6,9 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../../supabase/types";
 import { LiveTrackingMap } from "@/components/org/LiveTrackingMap";
-import { formatItemsLabel, type RequestItem } from "@/lib/requestItems";
+import { requestLabel, type RequestItem } from "@/lib/requestItems";
 import { tagLabel } from "@/lib/tags";
+import { HandoverProof } from "@/components/HandoverProof";
 
 type Request = Database["public"]["Tables"]["requests"]["Row"] & {
   request_items: RequestItem[];
@@ -39,6 +40,7 @@ function statusBadge(status: string) {
     pending: { bg: "#e7e8e9", text: "#46464e", label: "Pending" },
     approved: { bg: "#e7e8e9", text: "#46464e", label: "Approved" },
     rejected: { bg: "#ffdad6", text: "#93000a", label: "Rejected" },
+    cancelled: { bg: "#e7e8e9", text: "#6b7280", label: "Cancelled" },
     accepted: { bg: "#e7e8e9", text: "#46464e", label: "Matched" },
     in_transit: { bg: "#dd3022", text: "#ffffff", label: "In Transit" },
     delivered: { bg: "#d8f6e3", text: "#0f5132", label: "Delivered" },
@@ -101,6 +103,8 @@ export default function RequestDetailPage() {
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +190,19 @@ export default function RequestDetailPage() {
     };
   }, [route?.id]);
 
+  async function handleCancel() {
+    if (!window.confirm("Cancel this request? Volunteers will no longer see it.")) return;
+    setCancelling(true);
+    setActionError(null);
+    const { error } = await supabase.rpc("cancel_request", { p_request_id: params.id });
+    setCancelling(false);
+    if (error) {
+      setActionError(error.message);
+      return;
+    }
+    setRequest((prev) => (prev ? { ...prev, status: "cancelled" } : prev));
+  }
+
   if (loading) {
     return <div className="p-6 text-[#46464e]">Loading…</div>;
   }
@@ -214,7 +231,7 @@ export default function RequestDetailPage() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <h2 className="text-[32px] font-semibold leading-[40px] tracking-[-0.32px] text-[#191c1d]">
-              {formatItemsLabel(request.request_items)}
+              {requestLabel(request)}
             </h2>
             {urgencyBadge(request.urgency)}
           </div>
@@ -222,7 +239,30 @@ export default function RequestDetailPage() {
             Request #{request.id.slice(0, 8)} · Submitted {new Date(request.created_at).toLocaleString()}
           </p>
         </div>
-        {statusBadge(request.status)}
+        <div className="flex flex-col items-end gap-3">
+          {statusBadge(request.status)}
+          {(request.status === "pending" || request.status === "approved") && (
+            <div className="flex gap-2">
+              {request.status === "pending" && (
+                <Link
+                  href={`/org/requests/${request.id}/edit`}
+                  className="rounded-lg border border-[#c7c5cf] px-4 py-2 text-[12px] font-semibold text-[#191c1d]"
+                >
+                  Edit
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="rounded-lg border border-[#b9100b] px-4 py-2 text-[12px] font-semibold text-[#b9100b] disabled:opacity-60"
+              >
+                {cancelling ? "Cancelling…" : "Cancel request"}
+              </button>
+            </div>
+          )}
+          {actionError && <p className="text-[12px] text-[#b9100b]">{actionError}</p>}
+        </div>
       </div>
 
       <div className="w-full rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
@@ -230,6 +270,8 @@ export default function RequestDetailPage() {
           <p className="text-[14px] text-[#93000a]">
             This request was reviewed and rejected by an admin.
           </p>
+        ) : request.status === "cancelled" ? (
+          <p className="text-[14px] text-[#46464e]">This request was cancelled.</p>
         ) : (
           <StatusTimeline status={request.status} />
         )}
@@ -296,6 +338,8 @@ export default function RequestDetailPage() {
           )}
         </div>
       </div>
+
+      {request.status === "delivered" && <HandoverProof requestId={request.id} />}
     </div>
   );
 }

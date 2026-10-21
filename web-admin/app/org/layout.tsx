@@ -25,11 +25,12 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
 
       const { data: org } = await supabase
         .from("organisations")
-        .select("name, verified")
+        .select("name, verified, active")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (!org?.verified) {
+      if (!org?.verified || !org.active) {
+        await supabase.auth.signOut();
         router.replace("/login");
         return;
       }
