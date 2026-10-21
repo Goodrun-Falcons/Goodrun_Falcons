@@ -577,7 +577,53 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_assign_volunteer: {
+        Args: { p_request_id: string; p_volunteer_id: string }
+        Returns: undefined
+      }
+      approve_signup_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      cancel_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      create_request: {
+        Args: {
+          p_description: string
+          p_urgency: string
+          p_tag: string
+          p_pickup_address: string
+          p_dropoff_address: string
+          p_pickup_lng: number
+          p_pickup_lat: number
+          p_dropoff_lng: number | null
+          p_dropoff_lat: number | null
+          p_items: Json
+        }
+        Returns: string
+      }
+      reject_signup_request: {
+        Args: { p_request_id: string; p_reason?: string }
+        Returns: undefined
+      }
+      update_pending_request: {
+        Args: {
+          p_request_id: string
+          p_description: string
+          p_urgency: string
+          p_tag: string
+          p_pickup_address: string
+          p_dropoff_address: string
+          p_pickup_lng: number
+          p_pickup_lat: number
+          p_dropoff_lng: number | null
+          p_dropoff_lat: number | null
+          p_items: Json
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
