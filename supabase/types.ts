@@ -1,0 +1,667 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.15"
+  }
+  public: {
+    Tables: {
+      admins: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      organisations: {
+        Row: {
+          active: boolean
+          address: string | null
+          created_at: string
+          email: string
+          id: string
+          location: unknown
+          name: string
+          phone: string | null
+          security_answer_1_hash: string | null
+          security_answer_2_hash: string | null
+          security_question_1: string | null
+          security_question_2: string | null
+          verified: boolean
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          created_at?: string
+          email: string
+          id: string
+          location?: unknown
+          name?: string
+          phone?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
+          verified?: boolean
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          location?: unknown
+          name?: string
+          phone?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
+          verified?: boolean
+        }
+        Relationships: []
+      }
+      pickups: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          ended_at: string | null
+          handover_photo_url: string | null
+          handover_timestamp: string | null
+          id: string
+          request_id: string
+          route_id: string | null
+          started_at: string | null
+          status: string
+          volunteer_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          ended_at?: string | null
+          handover_photo_url?: string | null
+          handover_timestamp?: string | null
+          id?: string
+          request_id: string
+          route_id?: string | null
+          started_at?: string | null
+          status?: string
+          volunteer_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          ended_at?: string | null
+          handover_photo_url?: string | null
+          handover_timestamp?: string | null
+          id?: string
+          request_id?: string
+          route_id?: string | null
+          started_at?: string | null
+          status?: string
+          volunteer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pickups_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickups_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickups_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickups_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      request_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_type: string
+          quantity: number
+          request_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_type: string
+          quantity?: number
+          request_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_type?: string
+          quantity?: number
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      requests: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          created_by_admin: boolean
+          description: string | null
+          dropoff_lat: number | null
+          dropoff_lng: number | null
+          dropoff_location: unknown
+          id: string
+          organisation_id: string
+          pickup_lat: number | null
+          pickup_lng: number | null
+          pickup_location: unknown
+          status: string
+          tag: string | null
+          urgency: string
+          volunteer_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by_admin?: boolean
+          description?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_location?: unknown
+          id?: string
+          organisation_id: string
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_location: unknown
+          status?: string
+          tag?: string | null
+          urgency?: string
+          volunteer_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by_admin?: boolean
+          description?: string | null
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_location?: unknown
+          id?: string
+          organisation_id?: string
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_location?: unknown
+          status?: string
+          tag?: string | null
+          urgency?: string
+          volunteer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requests_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requests_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_stops: {
+        Row: {
+          id: string
+          pickup_id: string | null
+          route_id: string
+          sequence_number: number
+          status: string
+          stop_type: string
+        }
+        Insert: {
+          id?: string
+          pickup_id?: string | null
+          route_id?: string
+          sequence_number: number
+          status: string
+          stop_type?: string
+        }
+        Update: {
+          id?: string
+          pickup_id?: string | null
+          route_id?: string
+          sequence_number?: number
+          status?: string
+          stop_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stops_pickup_id_fkey"
+            columns: ["pickup_id"]
+            isOneToOne: false
+            referencedRelation: "pickups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routes: {
+        Row: {
+          created_at: string
+          current_lat: number | null
+          current_lng: number | null
+          current_location: unknown
+          ended_at: string | null
+          id: string
+          started_at: string | null
+          status: string
+          volunteer_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_lat?: number | null
+          current_lng?: number | null
+          current_location?: unknown
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          volunteer_id: string
+        }
+        Update: {
+          created_at?: string
+          current_lat?: number | null
+          current_lng?: number | null
+          current_location?: unknown
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string
+          volunteer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routes_volunteer_id_fkey"
+            columns: ["volunteer_id"]
+            isOneToOne: false
+            referencedRelation: "volunteers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signup_requests: {
+        Row: {
+          address: string | null
+          auth_user_id: string
+          created_at: string
+          email: string
+          id: string
+          name: string
+          phone: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          security_answer_1_hash: string | null
+          security_answer_2_hash: string | null
+          security_question_1: string | null
+          security_question_2: string | null
+          status: string
+        }
+        Insert: {
+          address?: string | null
+          auth_user_id: string
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
+          status?: string
+        }
+        Update: {
+          address?: string | null
+          auth_user_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          security_answer_1_hash?: string | null
+          security_answer_2_hash?: string | null
+          security_question_1?: string | null
+          security_question_2?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          sender_id: string
+          sender_type: string
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          sender_id: string
+          sender_type: string
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          sender_id?: string
+          sender_type?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          organisation_id: string
+          status: string
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          organisation_id: string
+          status?: string
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          organisation_id?: string
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      volunteers: {
+        Row: {
+          availability: Json | null
+          completed_trips_count: number
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          phone: string
+          preferred_package_size: string
+          security_answer_one: string | null
+          security_answer_two: string | null
+          security_question_one: string | null
+          secutriy_question_two: string | null
+          service_area: unknown
+          status: string
+          vehicle_type: string | null
+        }
+        Insert: {
+          availability?: Json | null
+          completed_trips_count?: number
+          created_at?: string
+          email: string
+          full_name: string
+          id: string
+          phone: string
+          preferred_package_size?: string
+          security_answer_one?: string | null
+          security_answer_two?: string | null
+          security_question_one?: string | null
+          secutriy_question_two?: string | null
+          service_area?: unknown
+          status?: string
+          vehicle_type?: string | null
+        }
+        Update: {
+          availability?: Json | null
+          completed_trips_count?: number
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          phone?: string
+          preferred_package_size?: string
+          security_answer_one?: string | null
+          security_answer_two?: string | null
+          security_question_one?: string | null
+          secutriy_question_two?: string | null
+          service_area?: unknown
+          status?: string
+          vehicle_type?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
