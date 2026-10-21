@@ -7,6 +7,7 @@ import { formatTicketNumber } from "@/lib/tickets";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TicketStatus = "open" | "in_progress" | "resolved";
+type SourceType = "all" | "organisations" | "volunteers";
 
 interface Ticket {
   id: string;
@@ -15,27 +16,22 @@ interface Ticket {
   message: string;
   status: TicketStatus;
   created_at: string;
+  organisation_id: string | null;
+  volunteer_id: string | null;
   organisations: { name: string } | null;
-  volunteers: { full_name: string | null } | null;
+  volunteers: { full_name: string } | null;
 }
 
 interface TicketMessage {
   id: string;
   ticket_id: string;
-  sender_type: "org" | "admin";
+  sender_type: "org" | "volunteer" | "admin";
   sender_id: string;
   message: string;
   created_at: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Tickets come from an organisation or a volunteer.
-function ticketOwner(ticket: Pick<Ticket, "organisations" | "volunteers">): string {
-  if (ticket.organisations) return ticket.organisations.name;
-  if (ticket.volunteers) return `${ticket.volunteers.full_name ?? "Volunteer"} (volunteer)`;
-  return "Unknown";
-}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -48,9 +44,21 @@ function formatDate(iso: string): string {
 
 function formatShort(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }) +
+  return (
+    d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }) +
     " • " +
-    d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false });
+    d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false })
+  );
+}
+
+function submitterName(ticket: Ticket): string {
+  if (ticket.volunteers?.full_name) return ticket.volunteers.full_name;
+  if (ticket.organisations?.name) return ticket.organisations.name;
+  return "Unknown";
+}
+
+function submitterType(ticket: Ticket): "volunteer" | "org" {
+  return ticket.volunteer_id ? "volunteer" : "org";
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -105,6 +113,23 @@ function StatusBadge({ status }: { status: TicketStatus }) {
   );
 }
 
+// ─── Source badge (Org / Vol) ─────────────────────────────────────────────────
+
+function SourceBadge({ type }: { type: "volunteer" | "org" }) {
+  const isVol = type === "volunteer";
+  return (
+    <span
+      className="inline-flex items-center rounded-[2px] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px]"
+      style={{
+        background: isVol ? "rgba(17,24,60,0.08)" : "rgba(185,16,11,0.07)",
+        color: isVol ? "#11183c" : "#b9100b",
+      }}
+    >
+      {isVol ? "Vol" : "Org"}
+    </span>
+  );
+}
+
 // ─── Ticket list item ─────────────────────────────────────────────────────────
 
 function TicketListItem({
@@ -133,9 +158,10 @@ function TicketListItem({
         </span>
         <StatusBadge status={ticket.status} />
       </div>
-      <span className="text-[12px] text-[#5c403b]">
-        {ticketOwner(ticket)}
-      </span>
+      <div className="flex items-center gap-1.5">
+        <SourceBadge type={submitterType(ticket)} />
+        <span className="truncate text-[12px] text-[#5c403b]">{submitterName(ticket)}</span>
+      </div>
       <span className="text-[11px] text-[#9ca3af]">{formatShort(ticket.created_at)}</span>
     </button>
   );
@@ -145,12 +171,10 @@ function TicketListItem({
 
 function MessageBubble({
   message,
-  senderType,
 }: {
-  message: TicketMessage | { sender_type: "org" | "admin"; message: string; created_at: string; id: string };
-  senderType: "org" | "admin";
+  message: TicketMessage | { sender_type: "org" | "volunteer" | "admin"; message: string; created_at: string; id: string };
 }) {
-  const isAdmin = senderType === "admin";
+  const isAdmin = message.sender_type === "admin";
   return (
     <div className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
       <div
@@ -204,6 +228,7 @@ export default function SupportTicketsPage() {
   const [statusSaving, setStatusSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<TicketStatus | "all">("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceType>("all");
   const [adminId, setAdminId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -217,7 +242,9 @@ export default function SupportTicketsPage() {
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from("support_tickets")
-      .select("id, ticket_number, subject, message, status, created_at, organisations(name), volunteers(full_name)")
+      .select(
+        "id, ticket_number, subject, message, status, created_at, organisation_id, volunteer_id, organisations(name), volunteers(full_name)"
+      )
       .order("created_at", { ascending: false });
 
     if (data) setTickets(data as unknown as Ticket[]);
@@ -319,13 +346,18 @@ export default function SupportTicketsPage() {
 
   const filteredTickets = tickets.filter((t) => {
     const matchesStatus = filterStatus === "all" || t.status === filterStatus;
+    const matchesSource =
+      sourceFilter === "all" ||
+      (sourceFilter === "volunteers" && t.volunteer_id !== null) ||
+      (sourceFilter === "organisations" && t.organisation_id !== null);
     const searchLower = search.toLowerCase();
     const matchesSearch =
       !searchLower ||
       t.subject.toLowerCase().includes(searchLower) ||
       formatTicketNumber(t.ticket_number).toLowerCase().includes(searchLower) ||
-      ticketOwner(t).toLowerCase().includes(searchLower);
-    return matchesStatus && matchesSearch;
+      (t.organisations?.name ?? "").toLowerCase().includes(searchLower) ||
+      (t.volunteers?.full_name ?? "").toLowerCase().includes(searchLower);
+    return matchesStatus && matchesSource && matchesSearch;
   });
 
   const canReply = selectedTicket?.status !== "resolved";
@@ -350,9 +382,27 @@ export default function SupportTicketsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search subject or org…"
+              placeholder="Search subject, org or volunteer…"
               className="h-9 w-full rounded-[4px] border border-[#e5bdb7] bg-[#fbf8ff] pl-8 pr-3 text-[12px] text-[#1b1b22] placeholder:text-[#9ca3af] focus:outline-none focus:ring-1 focus:ring-[#11183c]"
             />
+          </div>
+
+          {/* Source filter */}
+          <div className="flex gap-1.5">
+            {(["all", "organisations", "volunteers"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSourceFilter(s)}
+                className="rounded-[2px] px-2.5 py-1 text-[11px] font-semibold transition-colors capitalize"
+                style={{
+                  background: sourceFilter === s ? "#11183C" : "rgba(17,24,60,0.06)",
+                  color: sourceFilter === s ? "white" : "#5c403b",
+                }}
+              >
+                {s === "all" ? "All" : s === "organisations" ? "Orgs" : "Volunteers"}
+              </button>
+            ))}
           </div>
 
           {/* Status filter */}
@@ -406,9 +456,10 @@ export default function SupportTicketsPage() {
                 <span className="pr-2 text-[12px] text-[#5c403b]">{formatTicketNumber(selectedTicket.ticket_number)}</span>
                 {selectedTicket.subject}
               </h3>
-              <span className="text-[12px] text-[#5c403b]">
-                {ticketOwner(selectedTicket)}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <SourceBadge type={submitterType(selectedTicket)} />
+                <span className="text-[12px] text-[#5c403b]">{submitterName(selectedTicket)}</span>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
@@ -440,7 +491,6 @@ export default function SupportTicketsPage() {
                   <MessageBubble
                     key={msg.id}
                     message={msg}
-                    senderType={msg.sender_type}
                   />
                 ))}
 

@@ -46,15 +46,14 @@ interface Request {
   pickups: Pickup[];
 }
 
-interface VolunteerOption {
-  id: string;
-  full_name: string | null;
-  email: string;
-}
-
 interface OrgOption {
   id: string;
   name: string;
+}
+
+interface Volunteer {
+  id: string;
+  full_name: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -372,10 +371,12 @@ function ApprovedRow({
   req,
   isFirst,
   onClick,
+  onAssign,
 }: Readonly<{
   req: Request;
   isFirst: boolean;
   onClick: () => void;
+  onAssign: () => void;
 }>) {
   const isUrgent = req.urgency === "high";
 
@@ -416,6 +417,7 @@ function ApprovedRow({
       <div className="relative z-10 col-span-2 flex items-center">
         <button
           type="button"
+          onClick={(e) => { e.stopPropagation(); onAssign(); }}
           className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#8F0002] transition-opacity hover:opacity-70"
         >
           Assign Driver
@@ -551,12 +553,8 @@ function DeliveryDetailModal({
   onApprove,
   onReject,
   onTagChange,
-  volunteers,
-  onAssign,
 }: Readonly<{
   req: Request;
-  volunteers: VolunteerOption[];
-  onAssign: (id: string, volunteerId: string) => Promise<void>;
   onClose: () => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string) => Promise<void>;
@@ -565,7 +563,6 @@ function DeliveryDetailModal({
   const [localTag, setLocalTag] = useState<Tag | null>(req.tag);
   const [tagDirty, setTagDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [volunteerId, setVolunteerId] = useState("");
 
   const driver = driverForRequest(req);
   const isPending = req.status === "pending";
@@ -583,14 +580,6 @@ function DeliveryDetailModal({
   async function handleReject() {
     setSaving(true);
     await onReject(req.id);
-    setSaving(false);
-    onClose();
-  }
-
-  async function handleAssign() {
-    if (!volunteerId) return;
-    setSaving(true);
-    await onAssign(req.id, volunteerId);
     setSaving(false);
     onClose();
   }
@@ -691,36 +680,6 @@ function DeliveryDetailModal({
                   {nameInitials(driver)}
                 </div>
                 <span className="text-[13px] text-[#1B1B22]">{driver ?? "Unassigned"}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Assign volunteer (approved, not yet taken) */}
-          {req.status === "approved" && (
-            <div className="flex flex-col gap-1.5">
-              <span className={labelClass}>Assign Volunteer</span>
-              <div className="flex gap-2">
-                <select
-                  value={volunteerId}
-                  onChange={(e) => setVolunteerId(e.target.value)}
-                  className="h-10 min-w-0 flex-1 rounded-lg px-3 text-[13px] text-[#1B1B22] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
-                  style={inputStyle}
-                >
-                  <option value="">Leave open for volunteers to accept</option>
-                  {volunteers.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.full_name ?? v.email}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleAssign}
-                  disabled={saving || !volunteerId}
-                  className="flex h-10 items-center rounded-lg bg-[#11183C] px-5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                >
-                  Assign
-                </button>
               </div>
             </div>
           )}
@@ -990,6 +949,137 @@ function NewDeliveryModal({
   );
 }
 
+// ─── Assign Driver Modal ──────────────────────────────────────────────────────
+
+function AssignDriverModal({
+  req,
+  volunteers,
+  onClose,
+  onAssign,
+}: Readonly<{
+  req: Request;
+  volunteers: Volunteer[];
+  onClose: () => void;
+  onAssign: (requestId: string, volunteerId: string) => Promise<void>;
+}>) {
+  const [selectedVolunteerId, setSelectedVolunteerId] = useState(volunteers[0]?.id ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const inputStyle: React.CSSProperties = { background: "#FBF8FF", border: "1px solid #E5BDB7" };
+  const labelClass = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
+
+  async function handleSubmit(e: { preventDefault(): void }) {
+    e.preventDefault();
+    if (!selectedVolunteerId) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onAssign(req.id, selectedVolunteerId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+    >
+      {/* Backdrop */}
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Close modal"
+        onClick={onClose}
+      />
+      <div
+        className="relative z-10 w-[440px] rounded-2xl bg-white shadow-xl"
+        style={{ border: "1px solid #E5BDB7" }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between rounded-t-2xl px-6 py-5"
+          style={{ borderBottom: "1px solid #E5BDB7", background: "#F5F2FC" }}
+        >
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
+              {shortId(req.id)}
+            </span>
+            <h2 className="text-[18px] font-semibold leading-6 text-[#1B1B22]">Assign Driver</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-7 items-center justify-center rounded-full text-[#5C403B] hover:bg-[rgba(185,16,11,0.08)] hover:text-[#B9100B]"
+            aria-label="Close"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-5 px-6 py-6">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="assign-volunteer" className={labelClass}>Select Volunteer</label>
+            {volunteers.length === 0 ? (
+              <p className="rounded-lg px-3 py-2.5 text-[13px] text-[#9CA3AF]" style={inputStyle}>
+                No active volunteers available.
+              </p>
+            ) : (
+              <select
+                id="assign-volunteer"
+                required
+                value={selectedVolunteerId}
+                onChange={(e) => setSelectedVolunteerId(e.target.value)}
+                className="h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
+                style={inputStyle}
+              >
+                {volunteers.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.full_name ?? "Unnamed Volunteer"}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {error && (
+            <p className="rounded-lg bg-[rgba(185,16,11,0.08)] px-4 py-3 text-[13px] text-[#B9100B]">
+              {error}
+            </p>
+          )}
+
+          {/* Footer */}
+          <div
+            className="flex items-center justify-end gap-3"
+            style={{ borderTop: "1px solid #E5BDB7", paddingTop: "16px" }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] hover:bg-[rgba(185,16,11,0.06)]"
+              style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || volunteers.length === 0}
+              className="flex h-10 items-center rounded-lg bg-[#B9100B] px-5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? "Assigning…" : "Confirm Assignment"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyState({ label }: Readonly<{ label: string }>) {
@@ -1009,11 +1099,12 @@ function EmptyState({ label }: Readonly<{ label: string }>) {
 export default function DeliveriesPage() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
-  const [volunteers, setVolunteers] = useState<VolunteerOption[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedReq, setSelectedReq] = useState<Request | null>(null);
+  const [assigningReq, setAssigningReq] = useState<Request | null>(null);
 
   const [pendingOpen, setPendingOpen] = useState(true);
   const [approvedOpen, setApprovedOpen] = useState(true);
@@ -1038,14 +1129,14 @@ export default function DeliveriesPage() {
         .order("name"),
       supabase
         .from("volunteers")
-        .select("id, full_name, email")
+        .select("id, full_name")
         .eq("status", "active")
         .order("full_name"),
     ]);
 
     if (reqData) setRequests(reqData as unknown as Request[]);
     if (orgData) setOrgs(orgData as OrgOption[]);
-    if (volData) setVolunteers(volData as VolunteerOption[]);
+    if (volData) setVolunteers(volData as Volunteer[]);
     setLoading(false);
   }, []);
 
@@ -1065,19 +1156,21 @@ export default function DeliveriesPage() {
     setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r)));
   }
 
-  async function handleAssign(id: string, volunteerId: string) {
-    const { error } = await supabase.rpc("admin_assign_volunteer", {
-      p_request_id: id,
-      p_volunteer_id: volunteerId,
-    });
-    if (error) { alert("Failed to assign volunteer: " + error.message); }
-    await load();
-  }
-
   async function handleTagChange(id: string, tag: Tag | null) {
     const { error } = await supabase.from("requests").update({ tag }).eq("id", id);
     if (error) { alert("Failed to update tag: " + error.message); return; }
     setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, tag } : r)));
+  }
+
+  async function handleAssignDriver(requestId: string, volunteerId: string) {
+    const { error } = await supabase.rpc("admin_assign_volunteer", {
+      p_request_id: requestId,
+      p_volunteer_id: volunteerId,
+    });
+    if (error) { alert("Failed to assign volunteer: " + error.message); return; }
+
+    setAssigningReq(null);
+    await load();
   }
 
   async function handleCreateDelivery(form: NewDeliveryForm) {
@@ -1248,6 +1341,7 @@ export default function DeliveriesPage() {
                 req={r}
                 isFirst={i === 0}
                 onClick={() => setSelectedReq(r)}
+                onAssign={() => setAssigningReq(r)}
               />
             ))
           )}
@@ -1322,8 +1416,16 @@ export default function DeliveriesPage() {
           onApprove={handleApprove}
           onReject={handleReject}
           onTagChange={handleTagChange}
+        />
+      )}
+
+      {/* Assign Driver Modal */}
+      {assigningReq && (
+        <AssignDriverModal
+          req={assigningReq}
           volunteers={volunteers}
-          onAssign={handleAssign}
+          onClose={() => setAssigningReq(null)}
+          onAssign={handleAssignDriver}
         />
       )}
     </div>
