@@ -16,6 +16,7 @@ interface Ticket {
   status: TicketStatus;
   created_at: string;
   organisations: { name: string } | null;
+  volunteers: { full_name: string | null } | null;
 }
 
 interface TicketMessage {
@@ -28,6 +29,13 @@ interface TicketMessage {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Tickets come from an organisation or a volunteer.
+function ticketOwner(ticket: Pick<Ticket, "organisations" | "volunteers">): string {
+  if (ticket.organisations) return ticket.organisations.name;
+  if (ticket.volunteers) return `${ticket.volunteers.full_name ?? "Volunteer"} (volunteer)`;
+  return "Unknown";
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -126,7 +134,7 @@ function TicketListItem({
         <StatusBadge status={ticket.status} />
       </div>
       <span className="text-[12px] text-[#5c403b]">
-        {ticket.organisations?.name ?? "Unknown Org"}
+        {ticketOwner(ticket)}
       </span>
       <span className="text-[11px] text-[#9ca3af]">{formatShort(ticket.created_at)}</span>
     </button>
@@ -209,7 +217,7 @@ export default function SupportTicketsPage() {
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from("support_tickets")
-      .select("id, ticket_number, subject, message, status, created_at, organisations(name)")
+      .select("id, ticket_number, subject, message, status, created_at, organisations(name), volunteers(full_name)")
       .order("created_at", { ascending: false });
 
     if (data) setTickets(data as unknown as Ticket[]);
@@ -316,7 +324,7 @@ export default function SupportTicketsPage() {
       !searchLower ||
       t.subject.toLowerCase().includes(searchLower) ||
       formatTicketNumber(t.ticket_number).toLowerCase().includes(searchLower) ||
-      (t.organisations?.name ?? "").toLowerCase().includes(searchLower);
+      ticketOwner(t).toLowerCase().includes(searchLower);
     return matchesStatus && matchesSearch;
   });
 
@@ -399,7 +407,7 @@ export default function SupportTicketsPage() {
                 {selectedTicket.subject}
               </h3>
               <span className="text-[12px] text-[#5c403b]">
-                {selectedTicket.organisations?.name ?? "Unknown Org"}
+                {ticketOwner(selectedTicket)}
               </span>
             </div>
 
