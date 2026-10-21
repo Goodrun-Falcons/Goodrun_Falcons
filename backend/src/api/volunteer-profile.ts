@@ -799,4 +799,54 @@ export default async function volunteerProfileAPI(
 
   });
 
+
+  app.get("/volunteers/:id/view-ticket-messages", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    const { id: ticketId } = request.params as { id: string };
+
+    const { data, error} = await supabaseUser
+    .from("support_ticket_messages")
+    .select(`
+        sender_type,
+        message,
+        created_at
+    `)
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true })
+    
+
+    if (error) {return reply.status(500).send({ error: error, message: "Cound not find relevant tickets"})};
+
+    return reply.status(200).send(data);
+
+  });
+
 }
