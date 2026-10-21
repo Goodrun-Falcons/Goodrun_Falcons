@@ -69,7 +69,7 @@ export default async function requestAPI(app: FastifyInstance) {
             dropoff_lng,
             tag,
             pickup_address,
-            dropoff_address
+            dropoff_address,
             total_package_size,
             request_items (
               id,
