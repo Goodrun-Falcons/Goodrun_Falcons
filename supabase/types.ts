@@ -121,7 +121,7 @@ export type Database = {
           assigned_by: string | null
           created_at: string
           ended_at: string | null
-          handover_photo_url: string | null
+          handover_photo: string | null
           handover_timestamp: string | null
           id: string
           request_id: string
@@ -134,7 +134,7 @@ export type Database = {
           assigned_by?: string | null
           created_at?: string
           ended_at?: string | null
-          handover_photo_url?: string | null
+          handover_photo?: string | null
           handover_timestamp?: string | null
           id?: string
           request_id: string
@@ -147,7 +147,7 @@ export type Database = {
           assigned_by?: string | null
           created_at?: string
           ended_at?: string | null
-          handover_photo_url?: string | null
+          handover_photo?: string | null
           handover_timestamp?: string | null
           id?: string
           request_id?: string

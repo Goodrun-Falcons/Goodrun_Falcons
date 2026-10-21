@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 const BUCKET = "handover-photos";
 
 // Shows the volunteer's proof-of-delivery photo for a request, if one was
-// uploaded. pickups.handover_photo_url may be a full URL or a storage path
+// uploaded. pickups.handover_photo may be a full URL or a storage path
 // inside the private handover-photos bucket (resolved to a signed URL).
 export function HandoverProof({ requestId }: { requestId: string }) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -18,16 +18,16 @@ export function HandoverProof({ requestId }: { requestId: string }) {
     async function load() {
       const { data } = await supabase
         .from("pickups")
-        .select("handover_photo_url, handover_timestamp")
+        .select("handover_photo, handover_timestamp")
         .eq("request_id", requestId)
-        .not("handover_photo_url", "is", null)
+        .not("handover_photo", "is", null)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (cancelled || !data?.handover_photo_url) return;
+      if (cancelled || !data?.handover_photo) return;
 
-      let url = data.handover_photo_url;
+      let url = data.handover_photo;
       if (!/^https?:\/\//.test(url)) {
         const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(url, 3600);
         if (!signed) return;

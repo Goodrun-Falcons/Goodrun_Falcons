@@ -180,8 +180,11 @@ begin
     raise exception 'Volunteer is not active';
   end if;
 
-  update requests set status = 'accepted'
-  where id = p_request_id and status = 'approved';
+  -- Mirror what the volunteer app's accept does (status + volunteer_id +
+  -- accepted_at); its My Route list filters on requests.volunteer_id.
+  update requests
+  set status = 'accepted', volunteer_id = p_volunteer_id, accepted_at = now()
+  where id = p_request_id and status = 'approved' and volunteer_id is null;
 
   if not found then
     raise exception 'Request is no longer awaiting a volunteer';
@@ -214,9 +217,9 @@ grant execute on function cancel_request(uuid) to authenticated;
 grant execute on function admin_assign_volunteer(uuid, uuid) to authenticated;
 
 -- ── proof-of-delivery photos ──────────────────────────────────────────────────
--- Private bucket; objects are keyed "<request_id>/<file>". pickups.handover_photo_url
--- holds that object path. Orgs read photos for their own requests, admins read
--- all, volunteers upload.
+-- Private bucket. The backend stores objects as "<volunteer_id>/<pickup_id>/<file>"
+-- and saves that path in pickups.handover_photo. Orgs read photos for their own
+-- requests, admins read all, volunteers manage their own folder.
 insert into storage.buckets (id, name, public)
 values ('handover-photos', 'handover-photos', false)
 on conflict (id) do nothing;
@@ -226,9 +229,11 @@ create policy "Orgs can view handover photos for own requests"
   using (
     bucket_id = 'handover-photos'
     and exists (
-      select 1 from requests
-      where requests.id::text = (storage.foldername(name))[1]
-        and requests.organisation_id = auth.uid()
+      select 1
+      from pickups p
+      join requests r on r.id = p.request_id
+      where p.id::text = (storage.foldername(name))[2]
+        and r.organisation_id = auth.uid()
     )
   );
 
@@ -239,9 +244,13 @@ create policy "Admins can view all handover photos"
     and exists (select 1 from admins where id = auth.uid())
   );
 
-create policy "Volunteers can upload handover photos"
-  on storage.objects for insert
+create policy "Volunteers can manage own handover photos"
+  on storage.objects for all
+  using (
+    bucket_id = 'handover-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  )
   with check (
     bucket_id = 'handover-photos'
-    and exists (select 1 from volunteers where id = auth.uid())
+    and (storage.foldername(name))[1] = auth.uid()::text
   );
