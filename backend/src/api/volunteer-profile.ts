@@ -667,6 +667,7 @@ export default async function volunteerProfileAPI(
     const { data, error} = await supabaseUser
     .from("support_tickets")
     .select(`
+        id,
         subject,
         message,
         status
