@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import multipart from "@fastify/multipart"
+import { takeCoverage } from "node:v8";
 
 const app = Fastify({ logger: true });
 
@@ -67,6 +68,8 @@ export default async function requestAPI(app: FastifyInstance) {
             dropoff_lat,
             dropoff_lng,
             tag,
+            pickup_address,
+            dropoff_address
             total_package_size,
             request_items (
               id,
@@ -197,7 +200,7 @@ export default async function requestAPI(app: FastifyInstance) {
       });
 
 
-
+    // GET Accepted Requets
     app.get("/accepted-requests", async (request, reply) => {
       const authHeader = request.headers.authorization;
   
@@ -245,6 +248,8 @@ export default async function requestAPI(app: FastifyInstance) {
               dropoff_lng,
               tag,
               total_package_size,
+              pickup_address,
+              dropoff_address,
               request_items (
                 id,
                 item_type,
@@ -267,6 +272,7 @@ export default async function requestAPI(app: FastifyInstance) {
   
       return reply.send(data);
       });
+
 
     // POST Cancel
     // Volunteer cancels a request which they accepted earlier
@@ -517,7 +523,6 @@ export default async function requestAPI(app: FastifyInstance) {
           });
         }
 
-        const { id: pickupId } = request.params as { id: string };
 
         const supabaseUser = createClient(
           process.env.SUPABASE_URL!,
@@ -527,38 +532,10 @@ export default async function requestAPI(app: FastifyInstance) {
           }
         );
 
-        // verify that this pickup belongs to the current volunteer
-        const {
-          data: pickup,
-          error: pickupError,
-        } = await supabaseUser
-          .from("pickups")
-          .select("id, volunteer_id, status")
-          .eq("id", pickupId)
-          .eq("volunteer_id", user.id)
-          .maybeSingle();
-
-        if (pickupError) {
-          request.log.error(pickupError);
-
-          return reply.status(500).send({
-            error: "Failed to retrieve pickup",
-          });
-        }
-
-        if (!pickup) {
-          return reply.status(404).send({
-            error: "Pickup not found",
-          });
-        }
-
-        // only allow handover after pickup has been collected
-        if (pickup.status !== "picked_up") {
-          return reply.status(409).send({
-            error: "Pickup is not ready for handover",
-            message: "The pickup must be in picked_up status.",
-          });
-        }
+        // obtain pickupId
+        const { id: pickupId } = request.params as {
+          id: string;
+        };
 
         // read the uploaded file
         const file = await request.file();
@@ -570,15 +547,23 @@ export default async function requestAPI(app: FastifyInstance) {
           });
         }
 
-        const extensionByMimeType: Record<string, string> = {
-          "image/jpeg": "jpg",
-          "image/png": "png",
-          "image/webp": "webp",
-        };
+        if (file.fieldname !== "photo") {
+          file.file.resume();
 
-        const extension = extensionByMimeType[file.mimetype];
+          return reply.status(400).send({
+            error: "INVALID_FILE_FIELD",
+            message: 'Upload the image using the field name "photo".',
+          });
+        }
 
-        if (!extension) {
+        // validate the file type
+        const allowedMimeTypes = [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+        ];
+
+        if (!allowedMimeTypes.includes(file.mimetype)) {
           file.file.resume();
 
           return reply.status(415).send({
@@ -587,95 +572,120 @@ export default async function requestAPI(app: FastifyInstance) {
           });
         }
 
+        // read the file into a Buffer
         let buffer: Buffer;
 
         try {
           buffer = await file.toBuffer();
-        } catch {
+        } catch (error) {
+          if (file.file.truncated) {
+            return reply.status(413).send({
+              error: "FILE_TOO_LARGE",
+              message: "The image must not exceed 5 MB.",
+            });
+          }
+
+          request.log.error(
+            { err: error },
+            "Failed to read uploaded image"
+          );
+
+          return reply.status(400).send({
+            error: "INVALID_UPLOAD",
+            message: "Failed to read uploaded image.",
+          });
+        }
+
+        if (file.file.truncated || buffer.length > 5 * 1024 * 1024) {
           return reply.status(413).send({
             error: "FILE_TOO_LARGE",
             message: "The image must not exceed 5 MB.",
           });
         }
 
-        if (file.file.truncated) {
-          return reply.status(413).send({
-            error: "FILE_TOO_LARGE",
-            message: "The image must not exceed 5 MB.",
+        if (buffer.length === 0) {
+          return reply.status(400).send({
+            error: "EMPTY_FILE",
+            message: "The uploaded image is empty.",
           });
         }
 
-        // generate a unique storage path
-        const storagePath =
-          `${user.id}/${pickupId}/${randomUUID()}.${extension}`;
+        // verify that the file content matches its claimed MIME type
+        const isJpeg =
+          file.mimetype === "image/jpeg" &&
+          buffer.length >= 3 &&
+          buffer[0] === 0xff &&
+          buffer[1] === 0xd8 &&
+          buffer[2] === 0xff;
 
-        const {
-          error: uploadError,
-        } = await supabaseUser.storage
-          .from("handover-photos")
-          .upload(storagePath, buffer, {
-            contentType: file.mimetype,
-            upsert: false,
-          });
+        const isPng =
+          file.mimetype === "image/png" &&
+          buffer.length >= 8 &&
+          buffer.subarray(0, 8).equals(
+            Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+          );
 
-        if (uploadError) {
-          request.log.error(uploadError);
+        const isWebp =
+          file.mimetype === "image/webp" &&
+          buffer.length >= 12 &&
+          buffer.toString("ascii", 0, 4) === "RIFF" &&
+          buffer.toString("ascii", 8, 12) === "WEBP";
 
-          return reply.status(500).send({
-            error: "PHOTO_UPLOAD_FAILED",
-            message: "Failed to upload handover photo.",
+        if (!isJpeg && !isPng && !isWebp) {
+          return reply.status(415).send({
+            error: "INVALID_IMAGE_CONTENT",
+            message: "The file content does not match a supported image type.",
           });
         }
 
-        // save photo metadata and complete the handover
+        // convert Buffer to PostgreSQL BYTEA hex format
+        const photoBytea = "\\x" + buffer.toString("hex");
+
         const handoverTimestamp = new Date().toISOString();
 
+        // store the image directly in the pickups table
         const {
           data: updatedPickup,
           error: updateError,
         } = await supabaseUser
           .from("pickups")
           .update({
-            handover_photo_path: storagePath,
+            handover_photo: photoBytea,
             handover_timestamp: handoverTimestamp,
-            status: "delivered",
           })
           .eq("id", pickupId)
           .eq("volunteer_id", user.id)
-          .eq("status", "picked_up")
-          .select(
-            "id, status, handover_photo_path, handover_timestamp"
-          )
+          .select("id, handover_timestamp")
           .maybeSingle();
 
-        if (updateError || !updatedPickup) {
-          if (updateError) {
-            request.log.error(updateError);
-          }
+        if (updateError) {
+          request.log.error(
+            { err: updateError, pickupId, userId: user.id },
+            "Failed to save handover photo"
+          );
 
-          // cleanup if the database update failed
-          const { error: cleanupError } = await supabaseUser.storage
-            .from("handover-photos")
-            .remove([storagePath]);
-
-          if (cleanupError) {
-            request.log.error(cleanupError);
-          }
-
-          return reply.status(409).send({
-            error: "HANDOVER_UPDATE_FAILED",
-            message:
-              "The handover could not be completed. Please refresh and try again.",
+          return reply.status(500).send({
+            error: "PHOTO_SAVE_FAILED",
+            message: "Failed to save handover photo.",
           });
         }
 
-        // return the updated pickup
+        if (!updatedPickup) {
+          return reply.status(404).send({
+            error: "Pickup not found or you are not authorised to update it.",
+          });
+        }
+
+        // return updated pickup
         return reply.status(200).send({
-          message: "Handover photo uploaded successfully",
+          message: "Handover photo saved successfully",
           pickup: updatedPickup,
         });
       } catch (error) {
-        request.log.error(error);
+        request.log.error(
+          { err: error },
+          "Unexpected error while saving handover photo"
+        );
 
         return reply.status(500).send({
           error: "Internal server error",
@@ -1090,6 +1100,9 @@ export default async function requestAPI(app: FastifyInstance) {
         pickup_location: unknown;
         dropoff_location: unknown;
         urgency: string;
+        pickup_address: string;
+        dropoff_address: string;
+        tag: string;
         items: {
           item_type: string;
           quantity: number;
@@ -1108,6 +1121,9 @@ export default async function requestAPI(app: FastifyInstance) {
           dropoff_location: body.dropoff_location,
           urgency: body.urgency ?? "medium",
           status: "approved",
+          tag: body.tag,
+          pickup_address: body.pickup_address,
+          dropoff_address: body.dropoff_address
         })
         .select("id")
         .single();

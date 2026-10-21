@@ -108,7 +108,6 @@ export default async function volunteerProfileAPI(
   // PATCH Profile
   // volunteer users updating profile data
   // US 4
-
   app.patch("/volunteers/me", async (request, reply) => {
     const authHeader = request.headers.authorization;
 
@@ -131,6 +130,13 @@ export default async function volunteerProfileAPI(
       });
     }
 
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
 
     const body = request.body as {
       full_name?: string;
@@ -170,14 +176,6 @@ export default async function volunteerProfileAPI(
         error: "No valid fields to update"
       });
     }
-
-    const supabaseUser = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-      {
-        accessToken: async() => token
-      }
-    )
 
     // update profile data
     const { data, error } = await supabaseUser
@@ -635,6 +633,7 @@ export default async function volunteerProfileAPI(
 
   });
   
+
   app.get("/volunteers/view-ticket", async (request, reply) => {
     const authHeader = request.headers.authorization;
 
@@ -678,6 +677,125 @@ export default async function volunteerProfileAPI(
     if (error) {return reply.status(500).send({ error: error, message: "Cound not find relevant tickets"})};
 
     return reply.status(200).send(data);
+
+  });
+
+
+  app.get("/volunteers/statistics", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    // count completed routes
+    const {
+      count: routeCount,
+      error: routeError,
+    } = await supabaseUser
+      .from("routes")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("volunteer_id", user.id)
+      .eq("status", "completed");
+    
+    if (routeError) {
+      request.log.error(
+        { err: routeError },
+        "Failed to count completed routes"
+      );
+    
+      return reply.status(500).send({
+        error: "Failed to count completed routes",
+      });
+    }
+
+
+    // count delivered items
+    const {
+      count: itemCount,
+      error: itemError,
+    } = await supabaseUser
+      .from("request_items")
+      .select("id, requests!inner(id)", {
+        count: "exact",
+        head: true,
+      })
+      .eq("requests.volunteer_id", user.id)
+      .eq("requests.status", "delivered");
+    
+    if (itemError) {
+      request.log.error(
+        { err: itemError },
+        "Failed to count delivered items"
+      );
+    
+      return reply.status(500).send({
+        error: "Failed to count delivered items",
+      });
+    }
+
+    // count unique organisations
+    const {
+      data: requests,
+      error: orgError,
+    } = await supabaseUser
+      .from("requests")
+      .select("organisation_id")
+      .eq("volunteer_id", user.id);
+    
+    if (orgError) {
+      request.log.error(
+        { err: orgError },
+        "Failed to count organisations"
+      );
+    
+      return reply.status(500).send({
+        error: "Failed to count organisations",
+      });
+    }
+    
+    // Remove null values and count distinct organisation IDs
+    const uniqueOrgIds = new Set(
+      requests
+        .map((row) => row.organisation_id)
+        .filter((id): id is string => id !== null)
+    );
+    
+    const organisationCount = uniqueOrgIds.size;
+
+    if (routeCount == null || itemCount == null || organisationCount == null) {
+      return reply.status(500).send({message: "Failed to count"});
+    }
+    
+    return reply.status(200).send({
+      route_count: routeCount, item_count: itemCount, organisation_count: organisationCount
+    });
 
   });
 

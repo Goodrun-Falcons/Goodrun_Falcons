@@ -415,7 +415,9 @@ export default async function routeAPI(app: FastifyInstance) {
                   dropoff_location,
                   urgency,
                   status,
-                  organisation_id
+                  organisation_id,
+                  pickup_address,
+                  dropoff_address
                 )
               )
             )
