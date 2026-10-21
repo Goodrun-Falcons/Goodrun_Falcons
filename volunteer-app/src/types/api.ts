@@ -1,41 +1,76 @@
 /**
- * Raw shapes returned by the GoodRun backend, mirroring the Supabase schema
- * (supabase/migrations on Web-App-Dev) and the selects in backend/src/api/*.ts.
+ * Raw shapes returned by the GoodRun backend (see the "GoodRun API" doc), mirroring the
+ * selects in backend/src/api/*.ts on feature/api-items — the branch currently deployed.
  * The UI never uses these directly — see src/lib/mappers.ts.
  */
 
 import { TaskTeam } from '@/types/task';
 
-export type ApiItemUrgency = 'low' | 'medium' | 'high';
+export type ApiRequestUrgency = 'low' | 'medium' | 'high';
 
-export type ApiItemStatus =
+export type ApiRequestStatus =
   'pending' | 'approved' | 'rejected' | 'accepted' | 'in_transit' | 'delivered';
 
-export type ApiItem = {
+/** One line of a request — a request can carry several item types. */
+export type ApiRequestItem = {
   id: string;
-  organisation_id: string;
   item_type: string;
   quantity: number;
+};
+
+/**
+ * A delivery request as listed by GET /requests (open ones, status `approved`) and
+ * GET /accepted-requests (the volunteer's own, status `accepted`).
+ */
+export type ApiRequest = {
+  id: string;
   description: string | null;
-  urgency: ApiItemUrgency;
-  status: ApiItemStatus;
-  created_at: string;
+  urgency: ApiRequestUrgency;
   // `pickup_location` / `dropoff_location` come back as unusable EWKB hex, so read the
   // generated lat/lng columns instead. dropoff is nullable.
   pickup_lat: number;
   pickup_lng: number;
   dropoff_lat: number | null;
   dropoff_lng: number | null;
-  // Team tag (`requests.tag` on the feature/multi-item-requests-and-tags branch). Not on
-  // the deployed backend yet, and nullable there for rows created before it existed.
-  tag?: TaskTeam | null;
+  /** Nullable for rows created before tags existed. */
+  tag: TaskTeam | null;
+  total_package_size: string | null;
+  /** No longer selected by GET /requests or /accepted-requests; kept for when it returns. */
+  organisations?: { name: string } | null;
+  request_items: ApiRequestItem[];
+  /**
+   * Only from GET /accepted-requests: the pickup(s) for this request that the volunteer
+   * can see — normally exactly one, theirs.
+   */
+  pickups?: { id: string; route_id: string | null; status: ApiPickupStatus }[];
+};
+
+/** GET /volunteers/me — the signed-in volunteer. */
+export type ApiVolunteer = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  preferred_package_size: string | null;
+  status: string;
+};
+
+/** GET /volunteers/statistics. */
+export type ApiVolunteerStats = {
+  /** Completed routes (trips) — a trip can carry more than one run. */
+  route_count: number;
+  /** request_items rows on delivered requests — item lines, not quantities. */
+  item_count: number;
+  /** Distinct organisations among the volunteer's requests. */
+  organisation_count: number;
 };
 
 export type ApiPickupStatus = 'assigned' | 'en_route' | 'picked_up' | 'delivered';
 
+/** Returned by POST /requests/:id/accept. */
 export type ApiPickup = {
   id: string;
-  item_id: string;
+  request_id: string;
   volunteer_id: string;
   route_id: string | null;
   status: ApiPickupStatus;
@@ -43,6 +78,14 @@ export type ApiPickup = {
   handover_timestamp: string | null;
   started_at: string | null;
   ended_at: string | null;
+};
+
+/** One entry of PUT /routes/:routeId/stops. */
+export type ApiRouteStopInput = {
+  pickup_id: string;
+  stop_type: 'pickup' | 'dropoff';
+  /** 1-based, consecutive across the whole route. */
+  sequence_number: number;
 };
 
 export type ApiRouteStatus = 'planned' | 'active' | 'completed';
@@ -57,14 +100,24 @@ export type ApiRoute = {
 };
 
 // route_stops has no migration in the repo yet — inferred from the select in GET /routes/:id.
+// Matches the select in GET /routes/:id — status / arrival_time / completion_time were
+// dropped from it because route_stops doesn't have the time columns.
 export type ApiRouteStop = {
   id: string;
   stop_type: 'pickup' | 'dropoff';
   sequence_number: number;
-  status: string;
-  arrival_time: string | null;
-  completion_time: string | null;
-  pickups: (ApiPickup & { items: ApiItem }) | null;
+  status?: string;
+  pickups:
+    | (ApiPickup & {
+        requests: {
+          id: string;
+          description: string | null;
+          urgency: ApiRequestUrgency;
+          status: ApiRequestStatus;
+          organisation_id: string;
+        };
+      })
+    | null;
 };
 
 export type ApiRouteWithStops = ApiRoute & {

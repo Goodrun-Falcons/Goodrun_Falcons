@@ -17,7 +17,11 @@ export type Coordinates = {
 /** UI-facing run. Built from a backend item by src/lib/mappers.ts. */
 export type Task = {
   id: string;
-  orgName: string;
+  /**
+   * Null when the backend doesn't send it — GET /requests currently returns no org for
+   * volunteers (RLS on `organisations`). Screens leave it out rather than show a placeholder.
+   */
+  orgName: string | null;
   /** The backend's `item_type`, e.g. "wheelchair". */
   itemType: string;
   itemSummary: string;
@@ -25,6 +29,8 @@ export type Task = {
   team: TaskTeam;
   /** ISO date (yyyy-mm-dd) the item needs to be moved by. Not in the backend yet. */
   dueBy?: string;
+  /** The backend's `total_package_size`, e.g. "small". Absent on older rows. */
+  packageSize?: string;
   pickupAddress: string;
   dropoffAddress: string;
   pickupCoords: Coordinates;
@@ -36,4 +42,6 @@ export type Task = {
   etaMinutes?: number;
   /** Drive time from the volunteer's current position to the pickup, in minutes. */
   minutesToPickup?: number;
+  /** The volunteer's pickup for this run, once they've accepted it. */
+  pickupId?: string;
 };

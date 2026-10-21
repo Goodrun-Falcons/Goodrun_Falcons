@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,14 +19,15 @@ import {
 } from '@/constants/theme';
 import { useTasks } from '@/context/tasks-context';
 import { useTheme } from '@/hooks/use-theme';
+import { api } from '@/lib/api';
+import { ApiVolunteerStats } from '@/types/api';
 
-// Placeholder until Story 1-4 (auth/profile) supplies the real signed-in volunteer.
-const VOLUNTEER_NAME = 'Alex Rivera';
-
-const IMPACT_STATS = [
-  { label: 'Runs done', value: '18' },
-  { label: 'Items moved', value: '132' },
-  { label: 'Orgs helped', value: '9' },
+// From GET /volunteers/statistics (see ApiVolunteerStats): completed trips, item lines
+// on delivered requests (not quantities), and distinct organisations.
+const IMPACT_STATS: { label: string; key: keyof ApiVolunteerStats }[] = [
+  { label: 'Trips done', key: 'route_count' },
+  { label: 'Items moved', key: 'item_count' },
+  { label: 'Orgs helped', key: 'organisation_count' },
 ];
 
 // Keeps Home short; the rest are a tap away on Nearby via "See all".
@@ -42,7 +44,27 @@ export default function HomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const tasks = useTasks();
+  const { tasks } = useTasks();
+  // The name from the volunteer's profile. Re-read whenever Home is shown, so an edit on
+  // the Profile screen shows up here straight away.
+  const [volunteerName, setVolunteerName] = useState<string | null>(null);
+  // Null until loaded; the cards show "–" meanwhile (or if it fails) rather than a number
+  // that isn't theirs.
+  const [stats, setStats] = useState<ApiVolunteerStats | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      // Both re-read whenever Home is shown, so a profile edit or a finished trip shows up
+      // straight away. On failure keep what's showing; apiFetch logs it.
+      api
+        .getMe()
+        .then((me) => setVolunteerName(me.full_name?.trim() || null))
+        .catch(() => {});
+      api
+        .getMyStats()
+        .then(setStats)
+        .catch(() => {});
+    }, [])
+  );
   const urgentTasks = tasks.filter((task) => task.urgency === 'urgent');
   // Nearest first. Runs without a distance yet sort last rather than first.
   const urgentCards = [...urgentTasks]
@@ -74,26 +96,14 @@ export default function HomeScreen() {
                 style={styles.brandLogo}
                 contentFit="contain"
               />
-              <View style={styles.bellButton}>
-                <SymbolView
-                  name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
-                  tintColor={theme.primaryText}
-                  size={17}
-                />
-                <View
-                  style={[
-                    styles.bellDot,
-                    { backgroundColor: theme.primary, borderColor: theme.secondary },
-                  ]}
-                />
-              </View>
             </View>
 
             <ThemedText style={styles.greetingLabel} themeColor="primaryText">
               {getGreeting()}
             </ThemedText>
             <ThemedText style={styles.greetingName} themeColor="primaryText">
-              {VOLUNTEER_NAME}
+              {/* Blank until loaded (or if the profile has no name), not a made-up one. */}
+              {volunteerName ?? ''}
             </ThemedText>
 
             <Pressable
@@ -139,7 +149,7 @@ export default function HomeScreen() {
                 style={[styles.statCard, Elevation.level1]}
               >
                 <ThemedText style={styles.statValue} themeColor="ink">
-                  {stat.value}
+                  {stats ? stats[stat.key] : '–'}
                 </ThemedText>
                 <ThemedText style={styles.statLabel} themeColor="mute">
                   {stat.label}
@@ -206,27 +216,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    // Height the bell button used to set, so the greeting below doesn't move up.
+    minHeight: 36,
   },
   brandLogo: {
     width: 90,
     height: 28,
-  },
-  bellButton: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bellDot: {
-    position: 'absolute',
-    top: 6,
-    right: 7,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1.5,
   },
   greetingLabel: {
     ...Typography.bodySm,

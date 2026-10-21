@@ -1,8 +1,8 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView } from 'expo-symbols';
-import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import ReorderableList, {
@@ -23,13 +23,17 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useLocation } from '@/context/location-context';
+import { useTasks } from '@/context/tasks-context';
 import { useTrip } from '@/context/trip-context';
+import { api, ApiError, describeApiError } from '@/lib/api';
 import { useDrivingRoute } from '@/hooks/use-driving-route';
 import { useTheme } from '@/hooks/use-theme';
 import { openDirections } from '@/lib/directions';
 import { formatDistance, formatDuration } from '@/lib/route-format';
 import { RouteMarker, RouteMarkerStatus } from '@/lib/route-map-html';
 import { distanceKm } from '@/lib/stop-order';
+import { routeStopsPayload } from '@/lib/trip-sync';
+import { stopTitle } from '@/types/trip';
 
 const SHEET_COLLAPSED_RATIO = 0.16;
 const SHEET_DEFAULT_RATIO = 0.52;
@@ -76,6 +80,8 @@ export default function MyRouteScreen() {
     tripStatus,
     startTrip,
     endTrip,
+    routeId,
+    setRouteId,
     orderCustomised,
     reorder,
     resetToSuggestedOrder,
@@ -106,9 +112,9 @@ export default function MyRouteScreen() {
   let nextStopMessage: string | null = null;
   if (tripActive && currentStop) {
     if (arrived) {
-      nextStopMessage = `You're at ${currentStop.org} — confirm the ${currentStop.type} when it's done`;
+      nextStopMessage = `You're at ${stopTitle(currentStop)} — confirm the ${currentStop.type} when it's done`;
     } else if (nextLeg) {
-      nextStopMessage = `Next: ${currentStop.org} · ${formatDistance(nextLeg.distanceM)} · ${formatDuration(nextLeg.durationS)}`;
+      nextStopMessage = `Next: ${stopTitle(currentStop)} · ${formatDistance(nextLeg.distanceM)} · ${formatDuration(nextLeg.durationS)}`;
     }
   }
   // You can end the trip once nothing is left to do — once a stop is picked up it can't
@@ -118,6 +124,140 @@ export default function MyRouteScreen() {
   const canReorder = tripStatus === 'ready' && stops.length > 1;
   const [orderNotice, setOrderNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { reload: reloadTasks, refreshing } = useTasks();
+  // Which trip button's request is in flight, so it can't be tapped twice.
+  const [tripBusy, setTripBusy] = useState<'starting' | 'ending' | null>(null);
+
+  // Marks every run on the trip as under way (pickup en_route, request in_transit). After
+  // the route is active, so a failure here can't leave a half-started trip behind: the
+  // trip goes ahead and the volunteer is told; picked / end still work on these pickups.
+  async function startPickups() {
+    const pickupIds = [...new Set(stops.flatMap((stop) => (stop.pickupId ? [stop.pickupId] : [])))];
+    const results = await Promise.allSettled(pickupIds.map((id) => api.startPickup(id)));
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) {
+      Alert.alert(
+        'Trip started',
+        `Some runs couldn't be marked as under way. ${describeApiError(failed.reason)}`
+      );
+    }
+  }
+
+  // Create the backend route (or reuse one a failed attempt already made), save the stop
+  // order to it, start it, start the trip here, then mark its runs under way.
+  async function handleStartTrip() {
+    if (tripBusy) return;
+    const payload = routeStopsPayload(stops);
+    if (!payload) {
+      // Ids arrive with the next sync; a run without a drop-off can't be routed at all.
+      reloadTasks('background');
+      Alert.alert(
+        "Couldn't start the trip",
+        stops.some((stop) => !stop.pickupId)
+          ? 'Your runs are still syncing. Please try again in a moment.'
+          : 'One of your runs has no drop-off point. Cancel it and try again.'
+      );
+      return;
+    }
+    setTripBusy('starting');
+    let id = routeId;
+    try {
+      if (!id) {
+        id = (await api.createRoute()).id;
+        setRouteId(id);
+      }
+      // Sent before starting, so the route never goes active without its stops. Safe to
+      // repeat on a retry — the backend replaces the stop list with what it's given.
+      await api.setRouteStops(id, payload);
+      await api.startRoute(id);
+      startTrip();
+      await startPickups();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return;
+      // 409: the route isn't `planned` any more — if it's already active (an earlier
+      // start went through but its reply was lost) carry on; otherwise make a fresh one
+      // next time.
+      if (id && e instanceof ApiError && e.status === 409) {
+        const route = await api.getRoute(id).catch(() => null);
+        if (route?.status === 'active') {
+          startTrip();
+          await startPickups();
+          return;
+        }
+        setRouteId(null);
+      }
+      Alert.alert("Couldn't start the trip", describeApiError(e));
+    } finally {
+      setTripBusy(null);
+    }
+  }
+
+  async function handleEndTrip() {
+    if (tripBusy) return;
+    setTripBusy('ending');
+    try {
+      if (routeId) await api.endRoute(routeId);
+      endTrip();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) return;
+      // 404 (route gone) or "Route is not active" (already ended): nothing left to end
+      // on the backend, so just finish locally.
+      if (e instanceof ApiError && (e.status === 404 || e.code === 'Route is not active')) {
+        endTrip();
+        return;
+      }
+      Alert.alert("Couldn't end the trip", describeApiError(e));
+    } finally {
+      setTripBusy(null);
+    }
+  }
+
+  // Re-sync with the backend each time this tab is opened (the accepted runs come along
+  // with every list load), so changes made elsewhere show up without a restart. The
+  // callback has to stay stable or every re-render would refire it, hence the ref.
+  const reloadRef = useRef(reloadTasks);
+  useEffect(() => {
+    reloadRef.current = reloadTasks;
+  });
+  useFocusEffect(
+    useCallback(() => {
+      reloadRef.current('background');
+    }, [])
+  );
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Releases the run on the backend (back to `approved`, so it shows on Nearby again)
+  // before dropping it from the trip.
+  async function releaseRun(taskId: string) {
+    setCancellingId(taskId);
+    try {
+      // Only before the trip starts — once it's under way runs can't be cancelled (the
+      // button is hidden), so this is always an accepted request being released.
+      await api.cancelRequest(taskId);
+      cancelTask(taskId);
+      // Puts the run back on Nearby; nothing to show here if it fails.
+      reloadTasks('background');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        Alert.alert("Couldn't cancel this run", "It's already in transit or no longer yours.");
+      } else if (!(e instanceof ApiError && e.status === 401)) {
+        // 401 already sends the volunteer back to login (see apiFetch).
+        Alert.alert("Couldn't cancel this run", describeApiError(e));
+      }
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
+  function confirmCancel(taskId: string, org: string | null) {
+    if (cancellingId) return;
+    const subject = org ?? 'It';
+    Alert.alert('Cancel this run?', `${subject} will go back on the list for other volunteers.`, [
+      { text: 'Keep it', style: 'cancel' },
+      { text: 'Cancel run', style: 'destructive', onPress: () => releaseRun(taskId) },
+    ]);
+  }
 
   function handleReorder({ from, to }: ReorderableListReorderEvent) {
     if (reorder(from, to)) {
@@ -305,6 +445,8 @@ export default function MyRouteScreen() {
               onReorder={handleReorder}
               keyExtractor={(stop) => stop.id}
               contentContainerStyle={styles.listContent}
+              refreshing={refreshing}
+              onRefresh={() => reloadTasks()}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               ListEmptyComponent={
                 <ThemedText style={styles.emptyState} themeColor="mute">
@@ -352,11 +494,16 @@ export default function MyRouteScreen() {
                             {stop.type.toUpperCase()}
                           </ThemedText>
                         </View>
-                        {!stop.done && stop.type === 'pickup' && (
+                        {/* Runs can only be cancelled before the trip starts. */}
+                        {!tripActive && !stop.done && stop.type === 'pickup' && (
                           <Pressable
-                            onPress={() => cancelTask(stop.taskId)}
+                            onPress={() => confirmCancel(stop.taskId, stop.org)}
+                            disabled={cancellingId !== null}
                             hitSlop={8}
-                            style={styles.cancelButton}
+                            style={[
+                              styles.cancelButton,
+                              cancellingId === stop.taskId && { opacity: 0.4 },
+                            ]}
                           >
                             <SymbolView
                               name={{ ios: 'xmark', android: 'close', web: 'close' }}
@@ -367,7 +514,7 @@ export default function MyRouteScreen() {
                         )}
                       </View>
                       <ThemedText style={styles.stopOrg} themeColor="ink" numberOfLines={1}>
-                        {stop.org}
+                        {stopTitle(stop)}
                       </ThemedText>
                       <ThemedText style={styles.stopItem} themeColor="mute" numberOfLines={1}>
                         {stop.item}
@@ -416,11 +563,14 @@ export default function MyRouteScreen() {
             <View style={styles.actionRow}>
               {tripStatus === 'ready' ? (
                 <Pressable
-                  onPress={startTrip}
-                  disabled={stops.length === 0}
+                  onPress={handleStartTrip}
+                  disabled={stops.length === 0 || tripBusy !== null}
                   style={[
                     styles.startButton,
-                    { backgroundColor: theme.primary, opacity: stops.length === 0 ? 0.5 : 1 },
+                    {
+                      backgroundColor: theme.primary,
+                      opacity: stops.length === 0 || tripBusy !== null ? 0.5 : 1,
+                    },
                   ]}
                 >
                   <SymbolView
@@ -429,21 +579,24 @@ export default function MyRouteScreen() {
                     size={16}
                   />
                   <ThemedText style={styles.startButtonLabel} themeColor="primaryText">
-                    Start trip
+                    {tripBusy === 'starting' ? 'Starting…' : 'Start trip'}
                   </ThemedText>
                 </Pressable>
               ) : (
                 <View style={styles.activeActionRow}>
                   <Pressable
-                    onPress={endTrip}
-                    disabled={!allStopsDone}
+                    onPress={handleEndTrip}
+                    disabled={!allStopsDone || tripBusy !== null}
                     style={[
                       styles.secondaryButton,
-                      { borderColor: 'rgba(208,35,39,0.3)', opacity: allStopsDone ? 1 : 0.5 },
+                      {
+                        borderColor: 'rgba(208,35,39,0.3)',
+                        opacity: allStopsDone && tripBusy === null ? 1 : 0.5,
+                      },
                     ]}
                   >
                     <ThemedText style={styles.secondaryButtonLabel} themeColor="primary">
-                      End trip
+                      {tripBusy === 'ending' ? 'Ending…' : 'End trip'}
                     </ThemedText>
                   </Pressable>
                 </View>

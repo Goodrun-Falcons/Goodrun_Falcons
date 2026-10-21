@@ -11,6 +11,8 @@ import { ThemedView } from '@/components/themed-view';
 import { BrandColors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useTrip } from '@/context/trip-context';
 import { useTheme } from '@/hooks/use-theme';
+import { api, ApiError, describeApiError } from '@/lib/api';
+import { toUploadableJpeg } from '@/lib/handover-photo';
 
 const CHECKLIST_ITEMS = ['Items match the request', 'Quantity verified', 'Items in good condition'];
 
@@ -31,6 +33,9 @@ export default function HandoverScreen() {
     CHECKLIST_ITEMS.map(() => false)
   );
   const [done, setDone] = useState(false);
+  // Which step of confirming is in flight, so the button can't be tapped twice and says
+  // what it's doing.
+  const [confirming, setConfirming] = useState<'uploading' | 'saving' | null>(null);
 
   const allChecked = checkedItems.every(Boolean);
   const canConfirm = photoUri !== null && allChecked;
@@ -72,10 +77,44 @@ export default function HandoverScreen() {
     setCheckedItems((prev) => prev.map((checked, i) => (i === index ? !checked : checked)));
   }
 
-  function confirmHandover() {
-    if (!canConfirm) return;
-    if (stop) completeStop(stop.id);
-    setDone(true);
+  // Tells the backend first and only then marks the stop done here.
+  // - Pickup: POST /pickups/:id/picked. Its photo stays on the device — the backend keeps
+  //   one photo per pickup, and the drop-off photo is the proof that counts.
+  // - Drop-off: upload the photo, then POST /pickups/:id/end (pickup + request delivered).
+  //   Photo first, so a delivery is never recorded without its proof; retrying after the
+  //   end fails just re-uploads the same photo.
+  async function confirmHandover() {
+    if (!canConfirm || !stop || confirming) return;
+    if (!stop.pickupId) {
+      Alert.alert(
+        "Couldn't confirm",
+        'This run is still syncing. Go back and try again in a moment.'
+      );
+      return;
+    }
+    try {
+      if (stop.type === 'pickup') {
+        setConfirming('saving');
+        await api.pickedPickup(stop.pickupId);
+      } else {
+        setConfirming('uploading');
+        await api.uploadHandoverPhoto(stop.pickupId, await toUploadableJpeg(photoUri!));
+        setConfirming('saving');
+        await api.endPickup(stop.pickupId);
+      }
+      completeStop(stop.id);
+      setDone(true);
+    } catch (e) {
+      // 401 already sends the volunteer back to login (see apiFetch).
+      if (!(e instanceof ApiError && e.status === 401)) {
+        Alert.alert(
+          stop.type === 'pickup' ? "Couldn't confirm the pickup" : "Couldn't confirm the drop-off",
+          describeApiError(e)
+        );
+      }
+    } finally {
+      setConfirming(null);
+    }
   }
 
   if (!stop) {
@@ -117,7 +156,7 @@ export default function HandoverScreen() {
           Photo recorded · {capturedAt ? formatTime(capturedAt) : ''}
         </ThemedText>
         <ThemedText style={styles.doneBody} themeColor="mute">
-          {stop.org} has been notified.
+          {stop.org ?? 'The organisation'} has been notified.
         </ThemedText>
         <Pressable
           onPress={() => router.back()}
@@ -149,7 +188,7 @@ export default function HandoverScreen() {
           </ThemedText>
         </View>
         <ThemedText style={styles.headerSubtitle} themeColor="primaryText">
-          {stop.org} · {stop.item}
+          {[stop.org, stop.item].filter(Boolean).join(' · ')}
         </ThemedText>
       </View>
 
@@ -272,14 +311,23 @@ export default function HandoverScreen() {
           <>
             <Pressable
               onPress={confirmHandover}
-              disabled={!allChecked}
+              disabled={!allChecked || confirming !== null}
               style={[
                 styles.actionButton,
-                { backgroundColor: theme.primary, opacity: allChecked ? 1 : 0.5 },
+                {
+                  backgroundColor: theme.primary,
+                  opacity: allChecked && confirming === null ? 1 : 0.5,
+                },
               ]}
             >
               <ThemedText style={styles.actionButtonLabel} themeColor="primaryText">
-                {isPickup ? 'Confirm pickup & continue' : 'Confirm drop-off & continue'}
+                {confirming === 'uploading'
+                  ? 'Uploading photo…'
+                  : confirming === 'saving'
+                    ? 'Confirming…'
+                    : isPickup
+                      ? 'Confirm pickup & continue'
+                      : 'Confirm drop-off & continue'}
               </ThemedText>
             </Pressable>
             {!allChecked && (

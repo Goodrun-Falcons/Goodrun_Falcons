@@ -7,6 +7,7 @@ function stop(taskId: string, type: 'pickup' | 'dropoff', lat: number, lng: numb
     taskId,
     org: taskId,
     address: '',
+    itemType: '',
     item: '',
     type,
     coords: { lat, lng },
