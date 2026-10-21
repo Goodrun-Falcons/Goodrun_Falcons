@@ -1170,4 +1170,70 @@ export default async function requestAPI(app: FastifyInstance) {
         items: createdItems,
       });
   });
-}
+
+    app.post("/pickups/:id/volunteer-location", async (request, reply) => {
+      const authHeader = request.headers.authorization;
+
+      if (!authHeader?.startsWith("Bearer ")) {
+        return reply.status(401).send({
+          error: "Missing or invalid authorisation header",
+        });
+      }
+
+      const token = authHeader.substring("Bearer ".length);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        return reply.status(401).send({
+          error: "Unauthorised",
+        });
+      }
+
+      const supabaseUser = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_PUBLISHABLE_KEY!,
+        {
+          accessToken: async () => token,
+        }
+      );
+
+      const { id: pickupId } = request.params as { id: string };
+
+      const body = request.body as {
+        current_lng: number,
+        current_lat: number
+      };
+
+      // update volunteer location in pickups table
+      const { data: pickup, error: pickupError } =
+      await supabaseUser
+        .from("pickups")
+        .update({
+          "current_lng": body.current_lng,
+          "current_lat": body.current_lat
+        })
+        .eq("id", pickupId)
+        .eq("volunteer_id", user.id)
+        .select("*")
+        .maybeSingle();
+
+      if (pickupError || !pickup) {
+        request.log.error(
+          { err: pickupError }
+        );
+
+        return reply.status(500).send({
+          error: "Failed to find pickup",
+        });
+      }
+
+      return reply.status(200).send({
+        message: "Location updated successfully",
+        pickup: pickup
+      });
+  });
+  }
