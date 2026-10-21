@@ -11,6 +11,7 @@ type Urgency = "low" | "medium" | "high";
 
 export type RequestFormValues = {
   requestId: string;
+  name: string;
   items: { itemType: string; quantity: number }[];
   description: string;
   urgency: Urgency;
@@ -40,6 +41,7 @@ export function RequestForm({ initial }: { initial?: RequestFormValues }) {
   const router = useRouter();
   const isEdit = Boolean(initial);
 
+  const [name, setName] = useState(initial?.name ?? "");
   const [items, setItems] = useState<ItemRow[]>(initial?.items ?? [emptyItemRow()]);
   const [description, setDescription] = useState(initial?.description ?? "");
   const [urgency, setUrgency] = useState<Urgency>(initial?.urgency ?? "medium");
@@ -76,6 +78,7 @@ export function RequestForm({ initial }: { initial?: RequestFormValues }) {
         : null;
 
       const payload = {
+        p_name: name,
         p_description: description,
         p_urgency: urgency,
         p_tag: tag,
@@ -114,6 +117,22 @@ export function RequestForm({ initial }: { initial?: RequestFormValues }) {
         onSubmit={handleSubmit}
         className="flex w-full max-w-[640px] flex-col gap-5 rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm"
       >
+        <div className="flex flex-col gap-2">
+          <label htmlFor="requestName" className="text-[12px] font-semibold tracking-[0.6px] text-[#191c1d]">
+            Request Name
+          </label>
+          <input
+            id="requestName"
+            type="text"
+            required
+            maxLength={80}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Winter blanket drive"
+            className="w-full rounded-lg border border-[#e1e3e4] bg-[#f3f4f5] px-[13px] py-[15px] text-[16px] text-[#191c1d] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#11183c]"
+          />
+        </div>
+
         <div className="flex flex-col gap-4">
           <span className="text-[12px] font-semibold tracking-[0.6px] text-[#191c1d]">Items</span>
           {items.map((row, index) => (

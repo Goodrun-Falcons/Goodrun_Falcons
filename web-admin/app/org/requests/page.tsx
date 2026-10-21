@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../supabase/types";
-import { formatItemsLabel, type RequestItem } from "@/lib/requestItems";
+import { requestLabel, type RequestItem } from "@/lib/requestItems";
 import { tagLabel } from "@/lib/tags";
 
 type Request = Database["public"]["Tables"]["requests"]["Row"] & {
@@ -196,7 +196,7 @@ function MyRequestsContent() {
                   {statusBadge(request.status)}
                 </div>
                 <h4 className="pt-1 text-[20px] font-semibold text-[#191c1d]">
-                  {formatItemsLabel(request.request_items)}
+                  {requestLabel(request)}
                 </h4>
                 {request.description && <p className="text-[16px] text-[#46464e]">{request.description}</p>}
                 <div className="flex items-center gap-2 pt-1 text-[12px] text-[#6b7280]">

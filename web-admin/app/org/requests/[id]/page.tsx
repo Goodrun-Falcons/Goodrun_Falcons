@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../../supabase/types";
 import { LiveTrackingMap } from "@/components/org/LiveTrackingMap";
-import { formatItemsLabel, type RequestItem } from "@/lib/requestItems";
+import { requestLabel, type RequestItem } from "@/lib/requestItems";
 import { tagLabel } from "@/lib/tags";
 import { HandoverProof } from "@/components/HandoverProof";
 
@@ -231,7 +231,7 @@ export default function RequestDetailPage() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <h2 className="text-[32px] font-semibold leading-[40px] tracking-[-0.32px] text-[#191c1d]">
-              {formatItemsLabel(request.request_items)}
+              {requestLabel(request)}
             </h2>
             {urgencyBadge(request.urgency)}
           </div>

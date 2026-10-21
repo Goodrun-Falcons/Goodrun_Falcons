@@ -40,6 +40,7 @@ export default function EditRequestPage() {
 
       setInitial({
         requestId: data.id,
+        name: data.name ?? "",
         items: data.request_items.map((i: { item_type: string; quantity: number }) => ({ itemType: i.item_type, quantity: i.quantity })),
         description: data.description ?? "",
         urgency: data.urgency as RequestFormValues["urgency"],

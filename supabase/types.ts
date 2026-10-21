@@ -255,6 +255,7 @@ export type Database = {
           dropoff_lng: number | null
           dropoff_location: unknown
           id: string
+          name: string | null
           organisation_id: string
           pickup_address: string | null
           pickup_lat: number | null
@@ -276,6 +277,7 @@ export type Database = {
           dropoff_lng?: number | null
           dropoff_location?: unknown
           id?: string
+          name?: string | null
           organisation_id: string
           pickup_address?: string | null
           pickup_lat?: number | null
@@ -297,6 +299,7 @@ export type Database = {
           dropoff_lng?: number | null
           dropoff_location?: unknown
           id?: string
+          name?: string | null
           organisation_id?: string
           pickup_address?: string | null
           pickup_lat?: number | null
@@ -629,6 +632,7 @@ export type Database = {
           p_dropoff_lat: number
           p_dropoff_lng: number
           p_items: Json
+          p_name: string
           p_pickup_address: string
           p_pickup_lat: number
           p_pickup_lng: number
@@ -664,6 +668,7 @@ export type Database = {
         Args: { p_reason?: string; p_request_id: string }
         Returns: undefined
       }
+      request_label: { Args: { p_request_id: string }; Returns: string }
       ticket_label: { Args: { n: number }; Returns: string }
       update_pending_request: {
         Args: {
@@ -672,6 +677,7 @@ export type Database = {
           p_dropoff_lat: number
           p_dropoff_lng: number
           p_items: Json
+          p_name: string
           p_pickup_address: string
           p_pickup_lat: number
           p_pickup_lng: number

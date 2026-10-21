@@ -34,6 +34,7 @@ interface Pickup {
 
 interface Request {
   id: string;
+  name: string | null;
   status: DbStatus;
   tag: Tag | null;
   description: string | null;
@@ -72,9 +73,9 @@ function shortId(uuid: string): string {
 }
 
 function requestTitle(req: Request): string {
-  const items = req.request_items.map((i) => i.item_type).join(", ");
   const org = req.organisations?.name ?? "Unknown Org";
-  return items ? `${items} — ${org}` : org;
+  const label = req.name?.trim() || req.request_items.map((i) => i.item_type).join(", ");
+  return label ? `${label} — ${org}` : org;
 }
 
 function nameInitials(name: string | null): string {
@@ -905,7 +906,7 @@ function NewDeliveryModal({
 
           {/* Title / Item */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="new-title" className={labelClass}>Delivery Item</label>
+            <label htmlFor="new-title" className={labelClass}>Request Name</label>
             <input
               id="new-title"
               type="text"
@@ -1024,7 +1025,7 @@ export default function DeliveriesPage() {
       supabase
         .from("requests")
         .select(
-          `id, status, tag, description, urgency, created_at, created_by_admin,
+          `id, name, status, tag, description, urgency, created_at, created_by_admin,
            organisations(name),
            request_items(item_type, quantity),
            pickups(volunteers(full_name))`
@@ -1092,6 +1093,7 @@ export default function DeliveriesPage() {
       .from("requests")
       .insert({
         organisation_id: form.orgId,
+        name: form.title.trim(),
         description: form.description || null,
         urgency: form.urgent ? "high" : "medium",
         status: "pending",
