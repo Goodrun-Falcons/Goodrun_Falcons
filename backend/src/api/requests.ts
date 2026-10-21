@@ -1171,6 +1171,7 @@ export default async function requestAPI(app: FastifyInstance) {
       });
   });
 
+  
     app.post("/pickups/:id/volunteer-location", async (request, reply) => {
       const authHeader = request.headers.authorization;
 
