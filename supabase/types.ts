@@ -194,11 +194,13 @@ export type Database = {
           description: string | null
           dropoff_lat: number | null
           dropoff_lng: number | null
+          dropoff_address: string | null
           dropoff_location: unknown
           id: string
           organisation_id: string
           pickup_lat: number | null
           pickup_lng: number | null
+          pickup_address: string | null
           pickup_location: unknown
           status: string
           tag: string | null
@@ -212,11 +214,13 @@ export type Database = {
           description?: string | null
           dropoff_lat?: number | null
           dropoff_lng?: number | null
+          dropoff_address?: string | null
           dropoff_location?: unknown
           id?: string
           organisation_id: string
           pickup_lat?: number | null
           pickup_lng?: number | null
+          pickup_address?: string | null
           pickup_location: unknown
           status?: string
           tag?: string | null
@@ -230,11 +234,13 @@ export type Database = {
           description?: string | null
           dropoff_lat?: number | null
           dropoff_lng?: number | null
+          dropoff_address?: string | null
           dropoff_location?: unknown
           id?: string
           organisation_id?: string
           pickup_lat?: number | null
           pickup_lng?: number | null
+          pickup_address?: string | null
           pickup_location?: unknown
           status?: string
           tag?: string | null

@@ -49,7 +49,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
-      <OrgSidebar />
+      <OrgSidebar orgName={orgName} />
       <div className="pl-[280px]">
         <OrgTopBar orgName={orgName} />
         {children}

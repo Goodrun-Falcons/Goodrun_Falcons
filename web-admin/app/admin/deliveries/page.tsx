@@ -1020,6 +1020,7 @@ export default function DeliveriesPage() {
         urgency: form.urgent ? "high" : "medium",
         status: "pending",
         created_by_admin: true,
+        pickup_address: form.pickupAddress.trim(),
         pickup_location: `POINT(${coords.lng} ${coords.lat})`,
       })
       .select()
