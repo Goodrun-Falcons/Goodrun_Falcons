@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,7 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 import { AuthButton, AuthError } from '@/components/auth-form';
 import { BrandColors, Radius, Spacing, Typography } from '@/constants/theme';
 
-type Ticket = { key: string; subject: string; message: string; status: string };
+type Ticket = { key: string; id: string | null; subject: string; message: string; status: string };
 const TICKETS_URL = 'https://goodrun-backend.onrender.com/volunteers/view-ticket';
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -25,8 +25,128 @@ function parseTickets(data: unknown): Ticket[] {
     if (typeof ticket.subject !== 'string' || typeof ticket.message !== 'string' || typeof ticket.status !== 'string') {
       throw new Error('The server returned incomplete ticket details. Please try again later.');
     }
-    return { key: String(index), subject: ticket.subject, message: ticket.message, status: ticket.status };
+    const rawId = ticket.ticket_id ?? ticket.id;
+    const id = typeof rawId === 'string' && rawId.trim()
+      ? rawId
+      : typeof rawId === 'number' && Number.isSafeInteger(rawId) ? String(rawId) : null;
+    return { key: id ?? `missing-id:${index}`, id, subject: ticket.subject, message: ticket.message, status: ticket.status };
   });
+}
+
+type TicketMessage = { senderType: string; message: string; createdAt: string };
+
+// API documentation currently treats :id as the ticket ID. Confirm with backend.
+function ticketMessagesUrl(ticketId: string): string {
+  return `https://goodrun-backend.onrender.com/volunteers/${encodeURIComponent(ticketId)}/view-ticket-messages`;
+}
+
+function parseMessages(data: unknown): TicketMessage[] {
+  const body = asObject(data);
+  const rows = Array.isArray(data) ? data : Array.isArray(body.messages) ? body.messages : body.data;
+  if (!Array.isArray(rows)) {
+    throw new Error('Unexpected message format. Please contact the admin team.');
+  }
+  return rows.map((row: unknown) => {
+    const item = asObject(row);
+    if (typeof item.sender_type !== 'string' || !item.sender_type.trim() ||
+        typeof item.message !== 'string' || typeof item.created_at !== 'string') {
+      throw new Error('The server returned incomplete messages. Please try again later.');
+    }
+    return { senderType: item.sender_type, message: item.message, createdAt: item.created_at };
+  }).sort((a, b) => {
+    const first = Date.parse(a.createdAt);
+    const second = Date.parse(b.createdAt);
+    return Number.isFinite(first) && Number.isFinite(second) ? first - second : 0;
+  });
+}
+
+function formatMessageTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function TicketMessages({ ticketId }: { ticketId: string | null }) {
+  const [messages, setMessages] = useState<TicketMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadVersion, setReloadVersion] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    async function loadMessages() {
+      setIsLoading(true);
+      setError('');
+      setMessages([]);
+      if (!ticketId) {
+        setError('This ticket is missing its ID. Please contact the admin team.');
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const token = await SecureStore.getItemAsync('accessToken');
+        if (cancelled) return;
+        if (!token) { router.replace('/login'); return; }
+        const response = await fetch(ticketMessagesUrl(ticketId), {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+        if (response.status === 401) {
+          setError('Your session has expired. Please log in again.');
+          return;
+        }
+        const data: unknown = await response.json().catch(() => null);
+        if (cancelled) return;
+        if (!response.ok) {
+          const body = asObject(data);
+          setError(typeof body.message === 'string' && body.message.trim() ? body.message
+            : typeof body.error === 'string' && body.error.trim() ? body.error
+              : 'Unable to load ticket messages. Please try again.');
+          return;
+        }
+        setMessages(parseMessages(data));
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error && !(err instanceof TypeError)
+          ? err.message : 'Unable to connect to the server. Please try again.');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    void loadMessages();
+    return () => { cancelled = true; controller.abort(); };
+  }, [ticketId, reloadVersion]);
+
+  return (
+    <View style={styles.messages}>
+      <Text style={styles.subject}>Ticket conversation</Text>
+      <Text style={styles.hint}>View replies from the admin team here.</Text>
+      {isLoading ? (
+        <View style={styles.loadingMessages}>
+          <ActivityIndicator color={BrandColors.navy} />
+          <Text style={styles.hint}>Loading messages…</Text>
+        </View>
+      ) : error ? <AuthError message={error} /> : messages.length === 0 ? (
+        <Text accessibilityLiveRegion="polite" style={styles.body}>No messages yet. Admin replies will appear here.</Text>
+      ) : messages.map((item, index) => {
+        const sender = item.senderType.trim().toLowerCase();
+        const isAdmin = sender === 'admin';
+        const isVolunteer = sender === 'volunteer';
+        return (
+          <View key={`${item.createdAt}:${index}`} style={[styles.messageCard, isAdmin && styles.adminMessage]}>
+            <Text style={styles.subject}>{isAdmin ? 'Admin' : isVolunteer ? 'You' : item.senderType}</Text>
+            <Text selectable style={styles.body}>{item.message}</Text>
+            <Text style={styles.meta}>{formatMessageTime(item.createdAt)}</Text>
+          </View>
+        );
+      })}
+      {ticketId !== null && (
+        <AuthButton label={isLoading ? 'Loading messages…' : error ? 'Retry messages' : 'Refresh messages'}
+          loading={isLoading} disabled={isLoading} secondary
+          onPress={() => setReloadVersion((version) => version + 1)} />
+      )}
+    </View>
+  );
 }
 
 export default function PastTicketsScreen() {
@@ -90,6 +210,7 @@ export default function PastTicketsScreen() {
       <StatusBar style="dark" />
       <FlatList
         data={visibleTickets}
+        extraData={expandedId}
         keyExtractor={(ticket) => ticket.key}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
@@ -129,7 +250,7 @@ export default function PastTicketsScreen() {
                 </View>
                 <Text style={styles.subject}>{item.subject}</Text>
                 <View style={styles.metaRow}>
-                  <Text style={styles.meta}>{expanded ? 'Hide details' : 'View details'}</Text>
+                  <Text style={styles.meta}>{expanded ? 'Hide details' : 'View details and replies'}</Text>
                   <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={24} color={BrandColors.navy} />
                 </View>
               </Pressable>
@@ -137,6 +258,7 @@ export default function PastTicketsScreen() {
                 <View style={styles.details}>
                   <Text style={styles.detailLabel}>Your message</Text>
                   <Text selectable style={styles.body}>{item.message}</Text>
+                  <TicketMessages ticketId={item.id} />
                 </View>
               )}
             </View>
@@ -180,6 +302,11 @@ const styles = StyleSheet.create({
   resolvedBadge: { backgroundColor: '#EAF3ED' },
   resolvedText: { color: '#285C3D' },
   details: { padding: Spacing.md, borderTopWidth: 1, borderTopColor: '#E0E1E7', backgroundColor: '#FAFAFC', gap: Spacing.xs },
+  messages: { gap: Spacing.sm, marginTop: Spacing.md, paddingTop: Spacing.md, borderTopWidth: 1, borderTopColor: '#E0E1E7' },
+  hint: { ...Typography.bodySm, color: '#60646C' },
+  loadingMessages: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm },
+  messageCard: { padding: Spacing.md, borderRadius: Radius.md, backgroundColor: '#EEEFF5', gap: Spacing.xs },
+  adminMessage: { backgroundColor: '#EAF3ED', borderLeftWidth: 3, borderLeftColor: '#285C3D' },
   detailLabel: { ...Typography.bodySm, color: '#60646C' },
   pressed: { opacity: 0.65 },
   empty: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm },
