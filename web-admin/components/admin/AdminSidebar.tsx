@@ -124,11 +124,6 @@ const ORG_SUBNAV = [
     label: "Account Approval",
     icon: AccountApprovalIcon,
   },
-  {
-    href: "/admin/support-tickets",
-    label: "Support Tickets",
-    icon: SupportTicketsIcon,
-  },
 ];
 
 export default function AdminSidebar() {
@@ -251,6 +246,27 @@ export default function AdminSidebar() {
               style={{ color: isActive("/admin/volunteers") ? "#FFDAD5" : "rgba(227,225,235,0.7)" }}
             >
               Volunteers
+            </span>
+          </Link>
+
+          {/* Support Tickets (org + volunteer) */}
+          <Link
+            href="/admin/support-tickets"
+            className="flex items-center gap-3 px-4 py-3"
+            style={
+              isActive("/admin/support-tickets")
+                ? { background: "rgba(143,0,2,0.1)", borderLeft: "4px solid #8F0002", opacity: 0.9 }
+                : {}
+            }
+          >
+            <span className="shrink-0">
+              <SupportTicketsIcon active={isActive("/admin/support-tickets")} />
+            </span>
+            <span
+              className="text-[12px] font-medium leading-4"
+              style={{ color: isActive("/admin/support-tickets") ? "#FFDAD5" : "rgba(227,225,235,0.7)" }}
+            >
+              Support Tickets
             </span>
           </Link>
         </nav>
