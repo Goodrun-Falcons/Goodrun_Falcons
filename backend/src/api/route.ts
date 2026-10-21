@@ -404,7 +404,7 @@ export default async function routeAPI(app: FastifyInstance) {
                 request_id,
                 volunteer_id,
                 status,
-                handover_photo_url,
+                handover_photo,
                 handover_timestamp,
                 started_at,
                 ended_at,
