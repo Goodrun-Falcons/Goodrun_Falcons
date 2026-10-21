@@ -38,7 +38,9 @@ export default function HandoverScreen() {
   const [confirming, setConfirming] = useState<'uploading' | 'saving' | null>(null);
 
   const allChecked = checkedItems.every(Boolean);
-  const canConfirm = photoUri !== null && allChecked;
+  // Only the drop-off needs a photo — it's the proof of delivery. A pickup is just the checklist.
+  const needsPhoto = stop?.type === 'dropoff';
+  const canConfirm = (!needsPhoto || photoUri !== null) && allChecked;
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -78,8 +80,7 @@ export default function HandoverScreen() {
   }
 
   // Tells the backend first and only then marks the stop done here.
-  // - Pickup: POST /pickups/:id/picked. Its photo stays on the device — the backend keeps
-  //   one photo per pickup, and the drop-off photo is the proof that counts.
+  // - Pickup: POST /pickups/:id/picked. No photo — the drop-off photo is the proof that counts.
   // - Drop-off: upload the photo, then POST /pickups/:id/end (pickup + request delivered).
   //   Photo first, so a delivery is never recorded without its proof; retrying after the
   //   end fails just re-uploads the same photo.
@@ -103,6 +104,7 @@ export default function HandoverScreen() {
         await api.endPickup(stop.pickupId);
       }
       completeStop(stop.id);
+      setCapturedAt((prev) => prev ?? new Date());
       setDone(true);
     } catch (e) {
       // 401 already sends the volunteer back to login (see apiFetch).
@@ -153,7 +155,7 @@ export default function HandoverScreen() {
           {isPickup ? 'Pickup confirmed!' : 'Drop-off confirmed!'}
         </ThemedText>
         <ThemedText style={styles.doneBody} themeColor="mute">
-          Photo recorded · {capturedAt ? formatTime(capturedAt) : ''}
+          {isPickup ? 'Confirmed' : 'Photo recorded'} · {capturedAt ? formatTime(capturedAt) : ''}
         </ThemedText>
         <ThemedText style={styles.doneBody} themeColor="mute">
           {stop.org ?? 'The organisation'} has been notified.
@@ -193,42 +195,44 @@ export default function HandoverScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Pressable
-          onPress={takePhoto}
-          style={[styles.photoBox, photoUri !== null && styles.photoBoxCaptured]}
-        >
-          {photoUri ? (
-            <>
-              <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-              <View style={styles.photoCaptionOverlay}>
-                <ThemedText style={styles.photoCaptionText}>Tap to retake</ThemedText>
-              </View>
-              {capturedAt && (
-                <View style={styles.timestampBadge}>
-                  <ThemedText style={styles.timestampLabel}>
-                    Auto-timestamped · {formatTime(capturedAt)}
-                  </ThemedText>
+        {!isPickup && (
+          <Pressable
+            onPress={takePhoto}
+            style={[styles.photoBox, photoUri !== null && styles.photoBoxCaptured]}
+          >
+            {photoUri ? (
+              <>
+                <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+                <View style={styles.photoCaptionOverlay}>
+                  <ThemedText style={styles.photoCaptionText}>Tap to retake</ThemedText>
                 </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <View style={styles.photoPlaceholderIcon}>
-                <SymbolView
-                  name={{ ios: 'camera.fill', android: 'photo_camera', web: 'photo_camera' }}
-                  tintColor={theme.primary}
-                  size={24}
-                />
+                {capturedAt && (
+                  <View style={styles.timestampBadge}>
+                    <ThemedText style={styles.timestampLabel}>
+                      Auto-timestamped · {formatTime(capturedAt)}
+                    </ThemedText>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.photoPlaceholder}>
+                <View style={styles.photoPlaceholderIcon}>
+                  <SymbolView
+                    name={{ ios: 'camera.fill', android: 'photo_camera', web: 'photo_camera' }}
+                    tintColor={theme.primary}
+                    size={24}
+                  />
+                </View>
+                <ThemedText style={styles.photoPlaceholderTitle} themeColor="ink">
+                  Tap to take photo
+                </ThemedText>
+                <ThemedText style={styles.photoPlaceholderSubtitle} themeColor="mute">
+                  {isPickup ? 'Show items being collected' : 'Show items being dropped off'}
+                </ThemedText>
               </View>
-              <ThemedText style={styles.photoPlaceholderTitle} themeColor="ink">
-                Tap to take photo
-              </ThemedText>
-              <ThemedText style={styles.photoPlaceholderSubtitle} themeColor="mute">
-                {isPickup ? 'Show items being collected' : 'Show items being dropped off'}
-              </ThemedText>
-            </View>
-          )}
-        </Pressable>
+            )}
+          </Pressable>
+        )}
 
         <View style={styles.checklistCard}>
           <ThemedText style={styles.checklistTitle} themeColor="ink">
@@ -269,7 +273,7 @@ export default function HandoverScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
-        {photoUri === null ? (
+        {!isPickup && photoUri === null ? (
           <>
             <Pressable
               onPress={takePhoto}
@@ -302,9 +306,7 @@ export default function HandoverScreen() {
               </ThemedText>
             </Pressable>
             <ThemedText style={styles.footerHint} themeColor="mute">
-              {isPickup
-                ? 'A photo is required to confirm this pickup'
-                : 'A photo is required to confirm this drop-off'}
+              A photo is required to confirm this drop-off
             </ThemedText>
           </>
         ) : (

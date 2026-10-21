@@ -69,7 +69,7 @@ export default function NearbyScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const { acceptTask, isAccepted, acceptedCount, canAcceptMore } = useTrip();
+  const { acceptTask, isAccepted, acceptedCount, canAcceptMore, tripStatus } = useTrip();
   const { coords, status: locationStatus, requestPermission } = useLocation();
   // Set when arriving from a Home card: `/nearby?highlight=<taskId>`.
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
@@ -322,7 +322,9 @@ export default function NearbyScreen() {
                       ? 'Accepting…'
                       : canAcceptMore
                         ? undefined
-                        : `Trip full · ${MAX_RUNS_PER_TRIP} runs max`
+                        : tripStatus === 'active'
+                          ? 'Finish your current trip first'
+                          : `Trip full · ${MAX_RUNS_PER_TRIP} runs max`
                   }
                   onAccept={() => handleAccept(item)}
                   highlighted={item.id === highlightedTaskId}

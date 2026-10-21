@@ -1,6 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { AddressText } from '@/components/address-text';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Elevation, Radius, Spacing, Typography } from '@/constants/theme';
@@ -73,16 +74,30 @@ export function TaskCard({
       <View style={styles.routeSection}>
         <View style={styles.routeRow}>
           <View style={[styles.routeDot, { backgroundColor: theme.ink }]} />
-          <ThemedText style={styles.routeText} themeColor="ink" numberOfLines={1}>
-            {task.pickupAddress}
-          </ThemedText>
+          <AddressText
+            coords={task.pickupCoords}
+            fallback={task.pickupAddress}
+            style={styles.routeText}
+            themeColor="ink"
+            numberOfLines={1}
+          />
         </View>
         <View style={[styles.routeConnector, { backgroundColor: theme.surfacePressed }]} />
         <View style={styles.routeRow}>
           <View style={[styles.routeDot, styles.routeDotOutline, { borderColor: theme.ink }]} />
-          <ThemedText style={styles.routeText} themeColor="ink" numberOfLines={1}>
-            {task.dropoffAddress}
-          </ThemedText>
+          {task.dropoffCoords ? (
+            <AddressText
+              coords={task.dropoffCoords}
+              fallback={task.dropoffAddress}
+              style={styles.routeText}
+              themeColor="ink"
+              numberOfLines={1}
+            />
+          ) : (
+            <ThemedText style={styles.routeText} themeColor="ink" numberOfLines={1}>
+              {task.dropoffAddress}
+            </ThemedText>
+          )}
         </View>
       </View>
 

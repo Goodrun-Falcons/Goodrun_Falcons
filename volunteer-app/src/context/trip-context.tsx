@@ -2,8 +2,10 @@ import { createContext, ReactNode, useContext, useEffect, useRef, useState } fro
 
 import { useLocation } from '@/context/location-context';
 import { MAX_RUNS_PER_TRIP, recommendStopOrder, reorderStops } from '@/lib/stop-order';
+import { api } from '@/lib/api';
+import { pickupsToTrack, shouldReportLocation } from '@/lib/location-reporting';
 import { orderLikeRoute, planTripSync } from '@/lib/trip-sync';
-import { Task } from '@/types/task';
+import { Coordinates, Task } from '@/types/task';
 import { TripStop } from '@/types/trip';
 
 export type TripStatus = 'ready' | 'active';
@@ -80,7 +82,7 @@ type TripContextValue = {
   resetToSuggestedOrder: () => void;
   isAccepted: (taskId: string) => boolean;
   acceptedCount: number;
-  /** False once the trip holds MAX_RUNS_PER_TRIP runs; acceptTask then does nothing. */
+  /** False while the trip is under way or holds MAX_RUNS_PER_TRIP runs; acceptTask then does nothing. */
   canAcceptMore: boolean;
 };
 
@@ -102,8 +104,34 @@ export function TripProvider({ children }: { children: ReactNode }) {
   // When each run was accepted in this session, so a sync whose request was already in
   // flight can't drop a run it simply hadn't heard of yet.
   const acceptedAt = useRef(new Map<string, number>());
+  // Live tracking: while the trip is under way, report the volunteer's position against
+  // each run still in progress (POST /pickups/:id/volunteer-location), at most every 50 m
+  // or 30 s — the GPS fires every few metres mid-trip. Failures are just skipped (apiFetch
+  // logs them); the next fix tries again. Foreground only: expo-location doesn't deliver
+  // updates while the app is in the background.
+  const lastReport = useRef<{ coords: Coordinates; at: number } | null>(null);
+  const reporting = useRef(false);
+  useEffect(() => {
+    if (tripStatus !== 'active' || !coords) {
+      lastReport.current = null;
+      return;
+    }
+    const now = Date.now();
+    if (reporting.current || !shouldReportLocation(lastReport.current, coords, now)) return;
+    const pickupIds = pickupsToTrack(stops);
+    if (pickupIds.length === 0) return;
+    reporting.current = true;
+    lastReport.current = { coords, at: now };
+    Promise.allSettled(pickupIds.map((id) => api.reportPickupLocation(id, coords))).finally(() => {
+      reporting.current = false;
+    });
+    // Keyed on position and trip state; `stops` is read fresh on each fix.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coords, tripStatus]);
+
   const acceptedCount = new Set(stops.map((stop) => stop.taskId)).size;
-  const canAcceptMore = acceptedCount < MAX_RUNS_PER_TRIP;
+  // A trip that's under way is closed to new runs until it's ended.
+  const canAcceptMore = tripStatus === 'ready' && acceptedCount < MAX_RUNS_PER_TRIP;
 
   function startTrip() {
     setTripStatus('active');
