@@ -35,6 +35,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          link: string | null
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       organisations: {
         Row: {
           active: boolean
@@ -359,6 +392,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           security_answer_1_hash: string | null
@@ -375,6 +409,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           security_answer_1_hash?: string | null
@@ -391,6 +426,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           security_answer_1_hash?: string | null
@@ -452,6 +488,7 @@ export type Database = {
           organisation_id: string
           status: string
           subject: string
+          ticket_number: number
         }
         Insert: {
           created_at?: string
@@ -460,6 +497,7 @@ export type Database = {
           organisation_id: string
           status?: string
           subject: string
+          ticket_number?: number
         }
         Update: {
           created_at?: string
@@ -468,6 +506,7 @@ export type Database = {
           organisation_id?: string
           status?: string
           subject?: string
+          ticket_number?: number
         }
         Relationships: [
           {

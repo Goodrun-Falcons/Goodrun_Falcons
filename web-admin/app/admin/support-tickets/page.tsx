@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { formatTicketNumber } from "@/lib/tickets";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,6 +10,7 @@ type TicketStatus = "open" | "in_progress" | "resolved";
 
 interface Ticket {
   id: string;
+  ticket_number: number;
   subject: string;
   message: string;
   status: TicketStatus;
@@ -117,7 +119,10 @@ function TicketListItem({
       }}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[13px] font-semibold text-[#1b1b22]">{ticket.subject}</span>
+        <span className="truncate text-[13px] font-semibold text-[#1b1b22]">
+          <span className="pr-1.5 text-[11px] text-[#5c403b]">{formatTicketNumber(ticket.ticket_number)}</span>
+          {ticket.subject}
+        </span>
         <StatusBadge status={ticket.status} />
       </div>
       <span className="text-[12px] text-[#5c403b]">
@@ -204,7 +209,7 @@ export default function SupportTicketsPage() {
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from("support_tickets")
-      .select("id, subject, message, status, created_at, organisations(name)")
+      .select("id, ticket_number, subject, message, status, created_at, organisations(name)")
       .order("created_at", { ascending: false });
 
     if (data) setTickets(data as unknown as Ticket[]);
@@ -310,6 +315,7 @@ export default function SupportTicketsPage() {
     const matchesSearch =
       !searchLower ||
       t.subject.toLowerCase().includes(searchLower) ||
+      formatTicketNumber(t.ticket_number).toLowerCase().includes(searchLower) ||
       (t.organisations?.name ?? "").toLowerCase().includes(searchLower);
     return matchesStatus && matchesSearch;
   });
@@ -388,7 +394,10 @@ export default function SupportTicketsPage() {
             style={{ borderBottom: "1px solid #E5BDB7", background: "#F5F2FC" }}
           >
             <div className="flex flex-col gap-1">
-              <h3 className="text-[16px] font-semibold text-[#1b1b22]">{selectedTicket.subject}</h3>
+              <h3 className="text-[16px] font-semibold text-[#1b1b22]">
+                <span className="pr-2 text-[12px] text-[#5c403b]">{formatTicketNumber(selectedTicket.ticket_number)}</span>
+                {selectedTicket.subject}
+              </h3>
               <span className="text-[12px] text-[#5c403b]">
                 {selectedTicket.organisations?.name ?? "Unknown Org"}
               </span>

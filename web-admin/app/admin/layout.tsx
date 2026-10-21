@@ -4,21 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import AdminSidebar from "@/components/admin/AdminSidebar";
-
-function BellIcon() {
-  return (
-    <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
-      <path
-        d="M13 7A5 5 0 0 0 3 7c0 4-2 5-2 5h14s-2-1-2-5Z"
-        stroke="#46464E"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M9.73 17a2 2 0 0 1-3.46 0" stroke="#46464E" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 function SettingsIcon() {
   return (
@@ -90,15 +76,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <span className="text-2xl font-bold text-black">Medical Pantry</span>
 
           <div className="flex items-center gap-6">
-            {/* Bell with badge */}
-            <button
-              type="button"
-              className="relative flex size-10 items-center justify-center rounded-full"
-              aria-label="Notifications"
-            >
-              <BellIcon />
-              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#B9100B]" />
-            </button>
+            <NotificationsBell />
 
             {/* Settings */}
             <button
