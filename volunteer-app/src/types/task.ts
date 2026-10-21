@@ -29,6 +29,8 @@ export type Task = {
   team: TaskTeam;
   /** ISO date (yyyy-mm-dd) the item needs to be moved by. Not in the backend yet. */
   dueBy?: string;
+  /** The backend's `total_package_size`, e.g. "small". Absent on older rows. */
+  packageSize?: string;
   pickupAddress: string;
   dropoffAddress: string;
   pickupCoords: Coordinates;

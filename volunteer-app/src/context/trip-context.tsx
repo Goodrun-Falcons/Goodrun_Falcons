@@ -1,8 +1,8 @@
-import { createContext, ReactNode, useContext, useRef, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 
 import { useLocation } from '@/context/location-context';
 import { MAX_RUNS_PER_TRIP, recommendStopOrder, reorderStops } from '@/lib/stop-order';
-import { planTripSync } from '@/lib/trip-sync';
+import { orderLikeRoute, planTripSync } from '@/lib/trip-sync';
 import { Task } from '@/types/task';
 import { TripStop } from '@/types/trip';
 
@@ -48,6 +48,16 @@ type TripContextValue = {
   startTrip: () => void;
   /** Local only — the screen calls POST /routes/:id/end first. Clears routeId. */
   endTrip: () => void;
+  /**
+   * Picks up a route the backend says this volunteer already has (GET /routes), e.g.
+   * after a restart: remembers its id, and if it's active resumes the trip with the stops
+   * in the route's order. Ignored when this session already has a route of its own.
+   */
+  resumeRoute: (
+    routeId: string,
+    status: 'planned' | 'active',
+    order: { pickupId: string; type: TripStop['type'] }[]
+  ) => void;
   acceptTask: (task: Task) => void;
   /**
    * Makes the trip match the runs the backend says this volunteer holds
@@ -59,7 +69,7 @@ type TripContextValue = {
    *   a run accepted after `requestedAt`, which that response couldn't know about yet.
    */
   syncAccepted: (tasks: Task[], requestedAt: number) => void;
-  /** Removes a run's stops. Ignored once its pickup is done. */
+  /** Removes a run's stops. Ignored once the trip has started. */
   cancelTask: (taskId: string) => void;
   /** Marks a stop done — used by the Handover screen for both pickups and drop-offs. */
   completeStop: (stopId: string) => void;
@@ -80,6 +90,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [stops, setStops] = useState<TripStop[]>([]);
   const [tripStatus, setTripStatus] = useState<TripStatus>('ready');
   const [routeId, setRouteId] = useState<string | null>(null);
+  // Read from async callbacks (resumeRoute), which would otherwise see a stale value.
+  const routeIdRef = useRef(routeId);
+  useEffect(() => {
+    routeIdRef.current = routeId;
+  }, [routeId]);
   const [orderCustomised, setOrderCustomised] = useState(false);
   // The suggestion starts from wherever the volunteer is now. Read only when the order is
   // (re)computed — moving around doesn't reshuffle stops under them.
@@ -118,6 +133,24 @@ export function TripProvider({ children }: { children: ReactNode }) {
     setStops(arrange([...stops, ...taskToStops(task)]));
   }
 
+  function resumeRoute(
+    id: string,
+    status: 'planned' | 'active',
+    order: { pickupId: string; type: TripStop['type'] }[]
+  ) {
+    if (routeIdRef.current) return;
+    routeIdRef.current = id;
+    setRouteId(id);
+    if (status !== 'active') return;
+    setTripStatus('active');
+    setHighAccuracy(true);
+    if (order.length > 0) {
+      setStops((prev) => orderLikeRoute(prev, order));
+      // The route's order is now the one in use — keep later syncs from re-suggesting.
+      setOrderCustomised(true);
+    }
+  }
+
   function syncAccepted(tasks: Task[], requestedAt: number) {
     setStops((prev) => {
       const { missing, gone } = planTripSync(prev, tasks, {
@@ -145,10 +178,8 @@ export function TripProvider({ children }: { children: ReactNode }) {
   }
 
   function cancelTask(taskId: string) {
-    const pickupDone = stops.some(
-      (stop) => stop.taskId === taskId && stop.type === 'pickup' && stop.done
-    );
-    if (pickupDone) return;
+    // Runs are fixed once the trip is under way (and so their pickups are done or due).
+    if (tripStatus === 'active') return;
     const next = stops.filter((stop) => stop.taskId !== taskId);
     setStops(arrange(next));
     if (next.length === 0) setOrderCustomised(false);
@@ -184,6 +215,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
         setRouteId,
         startTrip,
         endTrip,
+        resumeRoute,
         acceptTask,
         syncAccepted,
         cancelTask,

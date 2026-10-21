@@ -19,7 +19,7 @@ export type ApiRequestItem = {
 };
 
 /**
- * A delivery request as listed by GET /requests (open ones, status `pending`) and
+ * A delivery request as listed by GET /requests (open ones, status `approved`) and
  * GET /accepted-requests (the volunteer's own, status `accepted`).
  */
 export type ApiRequest = {
@@ -53,6 +53,16 @@ export type ApiVolunteer = {
   phone: string | null;
   preferred_package_size: string | null;
   status: string;
+};
+
+/** GET /volunteers/statistics. */
+export type ApiVolunteerStats = {
+  /** Completed routes (trips) — a trip can carry more than one run. */
+  route_count: number;
+  /** request_items rows on delivered requests — item lines, not quantities. */
+  item_count: number;
+  /** Distinct organisations among the volunteer's requests. */
+  organisation_count: number;
 };
 
 export type ApiPickupStatus = 'assigned' | 'en_route' | 'picked_up' | 'delivered';
@@ -90,13 +100,13 @@ export type ApiRoute = {
 };
 
 // route_stops has no migration in the repo yet — inferred from the select in GET /routes/:id.
+// Matches the select in GET /routes/:id — status / arrival_time / completion_time were
+// dropped from it because route_stops doesn't have the time columns.
 export type ApiRouteStop = {
   id: string;
   stop_type: 'pickup' | 'dropoff';
   sequence_number: number;
-  status: string;
-  arrival_time: string | null;
-  completion_time: string | null;
+  status?: string;
   pickups:
     | (ApiPickup & {
         requests: {

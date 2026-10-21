@@ -55,3 +55,31 @@ export function routeStopsPayload(stops: TripStop[]): ApiRouteStopInput[] | null
     sequence_number: i + 1,
   }));
 }
+
+/** The route a restarted app should pick back up: the newest active one, else planned. */
+export function routeToResume<T extends { status: string; created_at: string }>(
+  routes: T[]
+): T | null {
+  const newestFirst = [...routes].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return (
+    newestFirst.find((route) => route.status === 'active') ??
+    newestFirst.find((route) => route.status === 'planned') ??
+    null
+  );
+}
+
+/**
+ * The trip's stops in the order the backend route has them (matched by pickup id and stop
+ * type). Stops the route doesn't mention keep their place after the ones it does.
+ */
+export function orderLikeRoute(
+  stops: TripStop[],
+  routeOrder: { pickupId: string; type: TripStop['type'] }[]
+): TripStop[] {
+  const rank = new Map(routeOrder.map((s, i) => [`${s.pickupId}:${s.type}`, i]));
+  const rankOf = (stop: TripStop) => rank.get(`${stop.pickupId}:${stop.type}`) ?? Infinity;
+  return stops
+    .map((stop, i) => ({ stop, i }))
+    .sort((a, b) => rankOf(a.stop) - rankOf(b.stop) || a.i - b.i)
+    .map(({ stop }) => stop);
+}

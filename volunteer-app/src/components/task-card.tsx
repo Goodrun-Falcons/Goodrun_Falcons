@@ -5,7 +5,6 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Elevation, Radius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDueBy } from '@/lib/date';
 import { teamLabel } from '@/lib/teams';
 import { Task, TaskUrgency } from '@/types/task';
 
@@ -112,15 +111,15 @@ export function TaskCard({
             </ThemedText>
           </View>
         )}
-        {task.dueBy !== undefined && (
+        {task.packageSize && (
           <View style={styles.metaItem}>
             <SymbolView
-              name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
+              name={{ ios: 'shippingbox', android: 'inventory_2', web: 'inventory_2' }}
               tintColor={theme.mute}
               size={14}
             />
             <ThemedText style={styles.metaText} themeColor="mute">
-              {formatDueBy(task.dueBy)}
+              {task.packageSize.charAt(0).toUpperCase() + task.packageSize.slice(1)} package
             </ThemedText>
           </View>
         )}

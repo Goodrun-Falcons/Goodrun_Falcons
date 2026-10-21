@@ -129,8 +129,23 @@ export default function MyRouteScreen() {
   // Which trip button's request is in flight, so it can't be tapped twice.
   const [tripBusy, setTripBusy] = useState<'starting' | 'ending' | null>(null);
 
+  // Marks every run on the trip as under way (pickup en_route, request in_transit). After
+  // the route is active, so a failure here can't leave a half-started trip behind: the
+  // trip goes ahead and the volunteer is told; picked / end still work on these pickups.
+  async function startPickups() {
+    const pickupIds = [...new Set(stops.flatMap((stop) => (stop.pickupId ? [stop.pickupId] : [])))];
+    const results = await Promise.allSettled(pickupIds.map((id) => api.startPickup(id)));
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) {
+      Alert.alert(
+        'Trip started',
+        `Some runs couldn't be marked as under way. ${describeApiError(failed.reason)}`
+      );
+    }
+  }
+
   // Create the backend route (or reuse one a failed attempt already made), save the stop
-  // order to it, start it, and only then start the trip here.
+  // order to it, start it, start the trip here, then mark its runs under way.
   async function handleStartTrip() {
     if (tripBusy) return;
     const payload = routeStopsPayload(stops);
@@ -157,6 +172,7 @@ export default function MyRouteScreen() {
       await api.setRouteStops(id, payload);
       await api.startRoute(id);
       startTrip();
+      await startPickups();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return;
       // 409: the route isn't `planned` any more — if it's already active (an earlier
@@ -166,6 +182,7 @@ export default function MyRouteScreen() {
         const route = await api.getRoute(id).catch(() => null);
         if (route?.status === 'active') {
           startTrip();
+          await startPickups();
           return;
         }
         setRouteId(null);
@@ -210,11 +227,13 @@ export default function MyRouteScreen() {
   );
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  // Releases the run on the backend (back to `pending`, so it shows on Nearby again)
+  // Releases the run on the backend (back to `approved`, so it shows on Nearby again)
   // before dropping it from the trip.
   async function releaseRun(taskId: string) {
     setCancellingId(taskId);
     try {
+      // Only before the trip starts — once it's under way runs can't be cancelled (the
+      // button is hidden), so this is always an accepted request being released.
       await api.cancelRequest(taskId);
       cancelTask(taskId);
       // Puts the run back on Nearby; nothing to show here if it fails.
@@ -475,7 +494,8 @@ export default function MyRouteScreen() {
                             {stop.type.toUpperCase()}
                           </ThemedText>
                         </View>
-                        {!stop.done && stop.type === 'pickup' && (
+                        {/* Runs can only be cancelled before the trip starts. */}
+                        {!tripActive && !stop.done && stop.type === 'pickup' && (
                           <Pressable
                             onPress={() => confirmCancel(stop.taskId, stop.org)}
                             disabled={cancellingId !== null}

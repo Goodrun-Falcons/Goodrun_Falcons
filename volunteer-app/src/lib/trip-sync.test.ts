@@ -1,4 +1,4 @@
-import { planTripSync, routeStopsPayload } from '@/lib/trip-sync';
+import { orderLikeRoute, planTripSync, routeStopsPayload, routeToResume } from '@/lib/trip-sync';
 import { Task } from '@/types/task';
 import { TripStop } from '@/types/trip';
 
@@ -85,5 +85,45 @@ describe('routeStopsPayload', () => {
 
   it('refuses a run with no drop-off stop', () => {
     expect(routeStopsPayload([stopsFor('a', false, 'p-a')[0]])).toBeNull();
+  });
+});
+
+describe('routeToResume', () => {
+  const route = (id: string, status: string, created_at: string) => ({ id, status, created_at });
+
+  it('prefers the newest active route, then planned, ignoring completed', () => {
+    expect(
+      routeToResume([
+        route('old-active', 'active', '2026-10-19'),
+        route('planned', 'planned', '2026-10-21'),
+        route('new-active', 'active', '2026-10-20'),
+      ])?.id
+    ).toBe('new-active');
+    expect(routeToResume([route('p', 'planned', '2026-10-20')])?.id).toBe('p');
+    expect(routeToResume([route('c', 'completed', '2026-10-20')])).toBeNull();
+  });
+});
+
+describe('orderLikeRoute', () => {
+  it('puts the stops in the route order', () => {
+    const a = stopsFor('a', false, 'p-a');
+    const b = stopsFor('b', false, 'p-b');
+    const ordered = orderLikeRoute(
+      [...a, ...b],
+      [
+        { pickupId: 'p-b', type: 'pickup' },
+        { pickupId: 'p-a', type: 'pickup' },
+        { pickupId: 'p-a', type: 'dropoff' },
+        { pickupId: 'p-b', type: 'dropoff' },
+      ]
+    );
+    expect(ordered.map((s) => s.id)).toEqual(['b:pickup', 'a:pickup', 'a:dropoff', 'b:dropoff']);
+  });
+
+  it('keeps stops the route does not mention at the end, in their old order', () => {
+    const ordered = orderLikeRoute(stopsFor('a', false, 'p-a'), [
+      { pickupId: 'p-a', type: 'dropoff' },
+    ]);
+    expect(ordered.map((s) => s.id)).toEqual(['a:dropoff', 'a:pickup']);
   });
 });

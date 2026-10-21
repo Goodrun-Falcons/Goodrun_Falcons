@@ -20,13 +20,14 @@ import {
 import { useTasks } from '@/context/tasks-context';
 import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
+import { ApiVolunteerStats } from '@/types/api';
 
-// Placeholder numbers: the backend has no stats endpoint yet (runs delivered, items
-// moved, distinct orgs). Swap for real values once it does.
-const IMPACT_STATS = [
-  { label: 'Runs done', value: '18' },
-  { label: 'Items moved', value: '132' },
-  { label: 'Orgs helped', value: '9' },
+// From GET /volunteers/statistics (see ApiVolunteerStats): completed trips, item lines
+// on delivered requests (not quantities), and distinct organisations.
+const IMPACT_STATS: { label: string; key: keyof ApiVolunteerStats }[] = [
+  { label: 'Trips done', key: 'route_count' },
+  { label: 'Items moved', key: 'item_count' },
+  { label: 'Orgs helped', key: 'organisation_count' },
 ];
 
 // Keeps Home short; the rest are a tap away on Nearby via "See all".
@@ -47,12 +48,21 @@ export default function HomeScreen() {
   // The name from the volunteer's profile. Re-read whenever Home is shown, so an edit on
   // the Profile screen shows up here straight away.
   const [volunteerName, setVolunteerName] = useState<string | null>(null);
+  // Null until loaded; the cards show "–" meanwhile (or if it fails) rather than a number
+  // that isn't theirs.
+  const [stats, setStats] = useState<ApiVolunteerStats | null>(null);
   useFocusEffect(
     useCallback(() => {
+      // Both re-read whenever Home is shown, so a profile edit or a finished trip shows up
+      // straight away. On failure keep what's showing; apiFetch logs it.
       api
         .getMe()
         .then((me) => setVolunteerName(me.full_name?.trim() || null))
-        .catch(() => {}); // Keep whatever name is showing; apiFetch logs the failure.
+        .catch(() => {});
+      api
+        .getMyStats()
+        .then(setStats)
+        .catch(() => {});
     }, [])
   );
   const urgentTasks = tasks.filter((task) => task.urgency === 'urgent');
@@ -86,19 +96,6 @@ export default function HomeScreen() {
                 style={styles.brandLogo}
                 contentFit="contain"
               />
-              <View style={styles.bellButton}>
-                <SymbolView
-                  name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
-                  tintColor={theme.primaryText}
-                  size={17}
-                />
-                <View
-                  style={[
-                    styles.bellDot,
-                    { backgroundColor: theme.primary, borderColor: theme.secondary },
-                  ]}
-                />
-              </View>
             </View>
 
             <ThemedText style={styles.greetingLabel} themeColor="primaryText">
@@ -152,7 +149,7 @@ export default function HomeScreen() {
                 style={[styles.statCard, Elevation.level1]}
               >
                 <ThemedText style={styles.statValue} themeColor="ink">
-                  {stat.value}
+                  {stats ? stats[stat.key] : '–'}
                 </ThemedText>
                 <ThemedText style={styles.statLabel} themeColor="mute">
                   {stat.label}
@@ -219,27 +216,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    // Height the bell button used to set, so the greeting below doesn't move up.
+    minHeight: 36,
   },
   brandLogo: {
     width: 90,
     height: 28,
-  },
-  bellButton: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bellDot: {
-    position: 'absolute',
-    top: 6,
-    right: 7,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1.5,
   },
   greetingLabel: {
     ...Typography.bodySm,

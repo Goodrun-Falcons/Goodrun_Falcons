@@ -34,6 +34,7 @@ export function requestToTask(request: ApiRequest): Task {
     itemSummary: itemSummary(request),
     urgency: URGENCY[request.urgency] ?? 'flexible',
     team: request.tag ?? UNTAGGED_TEAM,
+    packageSize: request.total_package_size ?? undefined,
     // Requests only carry coordinates, so these are placeholders until the backend (or
     // reverse geocoding) supplies street addresses.
     pickupAddress: 'Pickup location',

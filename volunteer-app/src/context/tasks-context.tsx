@@ -5,6 +5,7 @@ import { useTrip } from '@/context/trip-context';
 import { api, ApiError } from '@/lib/api';
 import { fetchDriveTimes } from '@/lib/mapbox-matrix';
 import { requestToTask } from '@/lib/mappers';
+import { routeToResume } from '@/lib/trip-sync';
 import { distanceKm } from '@/lib/stop-order';
 import { withDistanceFrom } from '@/lib/task-distance';
 import { Coordinates, Task } from '@/types/task';
@@ -47,7 +48,7 @@ function loadErrorMessage(error: unknown) {
  */
 export function TasksProvider({ children }: { children: ReactNode }) {
   const { coords } = useLocation();
-  const { syncAccepted } = useTrip();
+  const { syncAccepted, resumeRoute } = useTrip();
   const [source, setSource] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,6 +70,21 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     api
       .getAcceptedRequests()
       .then((accepted) => syncAccepted(accepted.map(requestToTask), requestedAt))
+      // Then any route already under way (e.g. the app restarted mid-trip). After the sync
+      // above, so the stops it reorders are already there.
+      .then(() => api.getMyRoutes())
+      .then(async (routes) => {
+        const route = routeToResume(routes);
+        if (!route) return;
+        const status = route.status as 'planned' | 'active';
+        const order =
+          status === 'active'
+            ? (await api.getRoute(route.id)).route_stops.flatMap((stop) =>
+                stop.pickups ? [{ pickupId: stop.pickups.id, type: stop.stop_type }] : []
+              )
+            : [];
+        resumeRoute(route.id, status, order);
+      })
       .catch(() => {});
     return api
       .getRequests()
