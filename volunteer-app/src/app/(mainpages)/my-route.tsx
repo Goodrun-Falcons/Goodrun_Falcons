@@ -12,6 +12,7 @@ import ReorderableList, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteMap } from '@/components/route-map';
+import { AddressText } from '@/components/address-text';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -519,9 +520,13 @@ export default function MyRouteScreen() {
                       <ThemedText style={styles.stopItem} themeColor="mute" numberOfLines={1}>
                         {stop.item}
                       </ThemedText>
-                      <ThemedText style={styles.stopAddress} themeColor="mute" numberOfLines={1}>
-                        {stop.address}
-                      </ThemedText>
+                      <AddressText
+                        coords={stop.coords}
+                        fallback={stop.address}
+                        style={styles.stopAddress}
+                        themeColor="mute"
+                        numberOfLines={1}
+                      />
                     </View>
                     {canReorder && !stop.done && <DragHandle />}
                     {isCurrent && tripActive && (

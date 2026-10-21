@@ -186,6 +186,12 @@ export const api = {
     } as unknown as Blob);
     return apiFetch<{ message?: string }>(`/pickups/${pickupId}/handover-photo`, 'POST', form);
   },
+  /** Live tracking: the volunteer's current position, stored on the pickup. */
+  reportPickupLocation: (pickupId: string, coords: { lat: number; lng: number }) =>
+    apiFetch<{ message: string }>(`/pickups/${pickupId}/volunteer-location`, 'POST', {
+      current_lat: coords.lat,
+      current_lng: coords.lng,
+    }),
   /** Delivered: also marks the request delivered. */
   endPickup: (pickupId: string) =>
     apiFetch<{ message: string }>(`/pickups/${pickupId}/end`, 'POST'),
