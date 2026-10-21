@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { TAG_OPTIONS, tagLabel, type Tag } from "@/lib/tags";
 import { geocodeAddress } from "@/lib/geocode";
+import { HandoverProof } from "@/components/HandoverProof";
 
 // ─── DB types ─────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,7 @@ type DbStatus =
   | "pending"
   | "approved"
   | "rejected"
+  | "cancelled"
   | "accepted"
   | "in_transit"
   | "delivered";
@@ -32,6 +34,7 @@ interface Pickup {
 
 interface Request {
   id: string;
+  name: string | null;
   status: DbStatus;
   tag: Tag | null;
   description: string | null;
@@ -69,9 +72,9 @@ function shortId(uuid: string): string {
 }
 
 function requestTitle(req: Request): string {
-  const items = req.request_items.map((i) => i.item_type).join(", ");
   const org = req.organisations?.name ?? "Unknown Org";
-  return items ? `${items} — ${org}` : org;
+  const label = req.name?.trim() || req.request_items.map((i) => i.item_type).join(", ");
+  return label ? `${label} — ${org}` : org;
 }
 
 function nameInitials(name: string | null): string {
@@ -162,6 +165,12 @@ const STATUS_CONFIG: Record<DbStatus, { dot: string; bg: string; text: string; l
     bg: "bg-[rgba(185,16,11,0.1)]",
     text: "text-[#B9100B]",
     label: "Rejected",
+  },
+  cancelled: {
+    dot: "bg-[#6B7280]",
+    bg: "bg-[rgba(107,114,128,0.1)]",
+    text: "text-[#6B7280]",
+    label: "Cancelled",
   },
   accepted: {
     dot: "bg-[#11183C]",
@@ -675,6 +684,9 @@ function DeliveryDetailModal({
             </div>
           )}
 
+          {/* Proof of delivery */}
+          {req.status === "delivered" && <HandoverProof requestId={req.id} />}
+
           {/* Tag */}
           <div className="flex flex-col gap-1.5">
             <span className={labelClass}>Tag</span>
@@ -853,7 +865,7 @@ function NewDeliveryModal({
 
           {/* Title / Item */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="new-title" className={labelClass}>Delivery Item</label>
+            <label htmlFor="new-title" className={labelClass}>Request Name</label>
             <input
               id="new-title"
               type="text"
@@ -1088,7 +1100,6 @@ export default function DeliveriesPage() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
-  const [adminId, setAdminId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
@@ -1100,19 +1111,12 @@ export default function DeliveriesPage() {
   const [activeOpen, setActiveOpen] = useState(true);
   const [completedOpen, setCompletedOpen] = useState(false);
 
-  // Capture admin's auth UID once on mount (needed for pickups.assigned_by)
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setAdminId(user.id);
-    });
-  }, []);
-
   const load = useCallback(async () => {
     const [{ data: reqData }, { data: orgData }, { data: volData }] = await Promise.all([
       supabase
         .from("requests")
         .select(
-          `id, status, tag, description, urgency, created_at, created_by_admin,
+          `id, name, status, tag, description, urgency, created_at, created_by_admin,
            organisations(name),
            request_items(item_type, quantity),
            pickups(volunteers(full_name))`
@@ -1159,19 +1163,11 @@ export default function DeliveriesPage() {
   }
 
   async function handleAssignDriver(requestId: string, volunteerId: string) {
-    const { error: pickupErr } = await supabase.from("pickups").insert({
-      request_id: requestId,
-      volunteer_id: volunteerId,
-      assigned_by: adminId,
-      status: "assigned",
+    const { error } = await supabase.rpc("admin_assign_volunteer", {
+      p_request_id: requestId,
+      p_volunteer_id: volunteerId,
     });
-    if (pickupErr) { alert("Failed to create pickup: " + pickupErr.message); return; }
-
-    const { error: reqErr } = await supabase
-      .from("requests")
-      .update({ status: "accepted" })
-      .eq("id", requestId);
-    if (reqErr) { alert("Failed to update request status: " + reqErr.message); return; }
+    if (error) { alert("Failed to assign volunteer: " + error.message); return; }
 
     setAssigningReq(null);
     await load();
@@ -1190,10 +1186,12 @@ export default function DeliveriesPage() {
       .from("requests")
       .insert({
         organisation_id: form.orgId,
+        name: form.title.trim(),
         description: form.description || null,
         urgency: form.urgent ? "high" : "medium",
         status: "pending",
         created_by_admin: true,
+        pickup_address: form.pickupAddress.trim(),
         pickup_location: `POINT(${coords.lng} ${coords.lat})`,
       })
       .select()

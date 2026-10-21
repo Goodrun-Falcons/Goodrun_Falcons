@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { formatTicketNumber } from "@/lib/tickets";
 import type { Database } from "../../../../supabase/types";
 
 type Ticket = Database["public"]["Tables"]["support_tickets"]["Row"];
@@ -293,7 +294,8 @@ export default function SupportPage() {
                 className="flex flex-col gap-1 rounded-lg border border-[#c7c5cf] bg-[#f8f9fa] p-[17px] text-left transition hover:border-[#11183c]"
               >
                 <div className="flex items-start justify-between">
-                  <h4 className="text-[16px] font-semibold text-[#191c1d]">{ticket.subject}</h4>
+                  <h4 className="text-[16px] font-semibold text-[#191c1d]"><span className="pr-2 text-[12px] font-semibold text-[#6b7280]">{formatTicketNumber(ticket.ticket_number)}</span>
+                    {ticket.subject}</h4>
                   {statusBadge(ticket.status)}
                 </div>
                 <p className="line-clamp-2 text-[14px] text-[#46464e]">{ticket.message}</p>
@@ -311,7 +313,10 @@ export default function SupportPage() {
           <div className="flex max-h-[85vh] w-full max-w-[640px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="flex shrink-0 items-start justify-between border-b border-[#eaecf0] px-6 py-5">
               <div className="flex flex-col gap-1">
-                <h3 className="text-[18px] font-semibold text-[#191c1d]">{selectedTicket.subject}</h3>
+                <h3 className="text-[18px] font-semibold text-[#191c1d]">
+                  <span className="pr-2 text-[13px] text-[#6b7280]">{formatTicketNumber(selectedTicket.ticket_number)}</span>
+                  {selectedTicket.subject}
+                </h3>
                 <div className="flex items-center gap-2">
                   {statusBadge(selectedTicket.status)}
                   <span className="text-[12px] text-[#6b7280]">

@@ -126,20 +126,39 @@ export default function LoginPage() {
 
     const { data: org } = await supabase
       .from("organisations")
-      .select("verified")
+      .select("verified, active")
       .eq("id", data.user.id)
       .maybeSingle();
 
-    if (!org?.verified) {
-      await supabase.auth.signOut();
-      setError(
-        "Your account is pending verification. An admin will review your details and contact you soon."
-      );
-      setLoading(false);
+    if (org?.verified && org.active) {
+      router.push("/org/dashboard");
       return;
     }
 
-    router.push("/org/dashboard");
+    let message =
+      "Your account is pending verification. An admin will review your details and contact you soon.";
+
+    if (org?.verified && !org.active) {
+      message = "This account has been deactivated. Please contact support.";
+    } else {
+      const { data: signup } = await supabase
+        .from("signup_requests")
+        .select("status, rejection_reason")
+        .eq("auth_user_id", data.user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (signup?.status === "rejected") {
+        message = signup.rejection_reason
+          ? `Your registration wasn't approved: ${signup.rejection_reason}`
+          : "Your registration wasn't approved. Please contact support for more information.";
+      }
+    }
+
+    await supabase.auth.signOut();
+    setError(message);
+    setLoading(false);
   }
 
   return (

@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { SECURITY_QUESTIONS } from "@/lib/securityQuestions";
+
+// Unknown emails get stable decoy questions so this endpoint cannot be used
+// to discover which emails are registered; the reset itself then fails with
+// the same generic "answer doesn't match" error as a wrong answer.
+function decoyQuestions(email: string) {
+  const digest = createHash("sha256").update(email.trim().toLowerCase()).digest();
+  const first = digest[0] % SECURITY_QUESTIONS.length;
+  const second = (first + 1 + (digest[1] % (SECURITY_QUESTIONS.length - 1))) % SECURITY_QUESTIONS.length;
+  return { question1: SECURITY_QUESTIONS[first], question2: SECURITY_QUESTIONS[second] };
+}
 
 export async function POST(request: NextRequest) {
   const { email } = await request.json();
@@ -15,10 +27,7 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (!org || !org.security_answer_1_hash || !org.security_answer_2_hash) {
-    return NextResponse.json(
-      { error: "No security questions are set up for this account." },
-      { status: 404 }
-    );
+    return NextResponse.json(decoyQuestions(email));
   }
 
   return NextResponse.json({

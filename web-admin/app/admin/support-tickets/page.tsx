@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { formatTicketNumber } from "@/lib/tickets";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -10,6 +11,7 @@ type SourceType = "all" | "organisations" | "volunteers";
 
 interface Ticket {
   id: string;
+  ticket_number: number;
   subject: string;
   message: string;
   status: TicketStatus;
@@ -150,7 +152,10 @@ function TicketListItem({
       }}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[13px] font-semibold text-[#1b1b22]">{ticket.subject}</span>
+        <span className="truncate text-[13px] font-semibold text-[#1b1b22]">
+          <span className="pr-1.5 text-[11px] text-[#5c403b]">{formatTicketNumber(ticket.ticket_number)}</span>
+          {ticket.subject}
+        </span>
         <StatusBadge status={ticket.status} />
       </div>
       <div className="flex items-center gap-1.5">
@@ -238,7 +243,7 @@ export default function SupportTicketsPage() {
     const { data } = await supabase
       .from("support_tickets")
       .select(
-        "id, subject, message, status, created_at, organisation_id, volunteer_id, organisations(name), volunteers(full_name)"
+        "id, ticket_number, subject, message, status, created_at, organisation_id, volunteer_id, organisations(name), volunteers(full_name)"
       )
       .order("created_at", { ascending: false });
 
@@ -349,6 +354,7 @@ export default function SupportTicketsPage() {
     const matchesSearch =
       !searchLower ||
       t.subject.toLowerCase().includes(searchLower) ||
+      formatTicketNumber(t.ticket_number).toLowerCase().includes(searchLower) ||
       (t.organisations?.name ?? "").toLowerCase().includes(searchLower) ||
       (t.volunteers?.full_name ?? "").toLowerCase().includes(searchLower);
     return matchesStatus && matchesSource && matchesSearch;
@@ -446,7 +452,10 @@ export default function SupportTicketsPage() {
             style={{ borderBottom: "1px solid #E5BDB7", background: "#F5F2FC" }}
           >
             <div className="flex flex-col gap-1">
-              <h3 className="text-[16px] font-semibold text-[#1b1b22]">{selectedTicket.subject}</h3>
+              <h3 className="text-[16px] font-semibold text-[#1b1b22]">
+                <span className="pr-2 text-[12px] text-[#5c403b]">{formatTicketNumber(selectedTicket.ticket_number)}</span>
+                {selectedTicket.subject}
+              </h3>
               <div className="flex items-center gap-1.5">
                 <SourceBadge type={submitterType(selectedTicket)} />
                 <span className="text-[12px] text-[#5c403b]">{submitterName(selectedTicket)}</span>
