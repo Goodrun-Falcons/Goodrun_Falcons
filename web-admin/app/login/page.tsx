@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -90,11 +90,34 @@ export default function LoginPage() {
 
   const isAdmin = mode === "admin";
 
+  // If sign-in succeeds but the redirect never completes, don't leave the
+  // button stuck on "Signing in..." forever. Cleared on unmount (redirect done).
+  const watchdog = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(watchdog.current), []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
+    clearTimeout(watchdog.current);
+    watchdog.current = setTimeout(() => {
+      setError("Sign-in is taking longer than expected. Please check your connection and try again.");
+      setLoading(false);
+    }, 15000);
+
+    let redirecting = false;
+    try {
+      redirecting = await signIn();
+    } catch {
+      setError("Something went wrong while signing in. Please try again.");
+      setLoading(false);
+    }
+    if (!redirecting) clearTimeout(watchdog.current);
+  }
+
+  // Resolves true when a redirect was started, false when an error was shown.
+  async function signIn(): Promise<boolean> {
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -103,7 +126,7 @@ export default function LoginPage() {
     if (signInError || !data.user) {
       setError("Invalid email or password.");
       setLoading(false);
-      return;
+      return false;
     }
 
     if (isAdmin) {
@@ -117,11 +140,11 @@ export default function LoginPage() {
         await supabase.auth.signOut();
         setError("This account is not authorized as an admin.");
         setLoading(false);
-        return;
+        return false;
       }
 
       router.push("/admin");
-      return;
+      return true;
     }
 
     const { data: org } = await supabase
@@ -132,7 +155,7 @@ export default function LoginPage() {
 
     if (org?.verified && org.active) {
       router.push("/org/dashboard");
-      return;
+      return true;
     }
 
     let message =
@@ -159,6 +182,7 @@ export default function LoginPage() {
     await supabase.auth.signOut();
     setError(message);
     setLoading(false);
+    return false;
   }
 
   return (
@@ -169,7 +193,7 @@ export default function LoginPage() {
           "linear-gradient(90deg, rgb(248, 249, 250) 0%, rgb(248, 249, 250) 100%), linear-gradient(90deg, rgb(255, 255, 255) 0%, rgb(255, 255, 255) 100%)",
       }}
     >
-      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-[#11183c] p-6">
+      <div className="relative hidden flex-1 flex-col items-center justify-center overflow-hidden bg-[#11183c] p-6 md:flex">
         <div
           className="absolute inset-0 opacity-80"
           style={{
@@ -209,8 +233,8 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center bg-white p-6">
-        <div className="w-full max-w-[448px] rounded-2xl border border-[#e1e3e4] bg-white p-[33px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
+      <div className="flex min-w-0 flex-1 items-center justify-center bg-white p-4 md:p-6">
+        <div className="w-full max-w-[448px] rounded-2xl border border-[#e1e3e4] bg-white p-5 shadow-[0_1px_1px_rgba(0,0,0,0.05)] sm:p-[33px]">
           <div className="flex flex-col gap-2">
             <h2 className="text-[24px] font-semibold leading-[32px] text-[#191c1d]">
               {isAdmin ? "Admin Login" : "Organization Login"}

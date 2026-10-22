@@ -70,7 +70,15 @@ const NAV_ITEMS = [
   { href: "/org/requests", label: "My Requests", icon: ListIcon },
 ];
 
-export function OrgSidebar({ orgName }: { orgName: string }) {
+export function OrgSidebar({
+  orgName,
+  open,
+  onNavigate,
+}: {
+  orgName: string;
+  open: boolean;
+  onNavigate: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -80,7 +88,11 @@ export function OrgSidebar({ orgName }: { orgName: string }) {
   }
 
   return (
-    <div className="fixed left-0 top-0 flex h-screen w-[280px] flex-col justify-between bg-[#11183c] py-4">
+    <div
+      className={`fixed left-0 top-0 z-40 flex h-dvh w-[280px] flex-col justify-between bg-[#11183c] py-4 transition-transform duration-200 md:z-auto md:h-screen md:translate-x-0 ${
+        open ? "translate-x-0" : "-translate-x-full"
+      }`}
+    >
       <div className="flex h-[81px] items-center px-6">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex h-10 w-[38px] shrink-0 items-center justify-center rounded-full bg-[#b9100b]">
@@ -104,6 +116,7 @@ export function OrgSidebar({ orgName }: { orgName: string }) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={
                 item.highlight
                   ? "mx-4 my-1 flex items-center gap-3 rounded-lg bg-[#b9100b] px-4 py-3 text-[12px] font-semibold text-white"
@@ -122,6 +135,7 @@ export function OrgSidebar({ orgName }: { orgName: string }) {
       <div className="border-t border-[#3e446b] pt-2">
         <Link
           href="/org/settings"
+          onClick={onNavigate}
           className={
             pathname === "/org/settings"
               ? "flex items-center gap-3 border-l-4 border-[#8f0002] bg-[rgba(143,0,2,0.1)] py-3 pl-5 pr-4 text-[12px] font-medium text-[#ffdad5]"
@@ -133,6 +147,7 @@ export function OrgSidebar({ orgName }: { orgName: string }) {
         </Link>
         <Link
           href="/org/support"
+          onClick={onNavigate}
           className="flex items-center gap-3 px-4 py-3 text-[12px] font-medium text-[rgba(227,225,235,0.7)]"
         >
           <SupportIcon />

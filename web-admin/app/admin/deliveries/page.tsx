@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useRealtimeReload } from "@/lib/useRealtimeReload";
 import { TAG_OPTIONS, tagLabel, type Tag } from "@/lib/tags";
-import { geocodeAddress } from "@/lib/geocode";
+import { geocodeAddress, type Coordinates } from "@/lib/geocode";
+import { AddressInput } from "@/components/AddressInput";
 import { HandoverProof } from "@/components/HandoverProof";
+import { UrgencyBadge } from "@/components/UrgencyBadge";
 
 // ─── DB types ─────────────────────────────────────────────────────────────────
 
@@ -202,19 +205,10 @@ function StatusBadge({ status }: Readonly<{ status: DbStatus }>) {
   );
 }
 
-function UrgentBadge() {
-  return (
-    <span className="inline-flex w-fit items-center gap-1 rounded-sm bg-[rgba(185,16,11,0.1)] px-1.5 py-0.5">
-      <span className="size-1.5 rounded-full bg-[#B9100B]" />
-      <span className="text-[10px] font-bold uppercase tracking-[0.05em] text-[#B9100B]">Urgent</span>
-    </span>
-  );
-}
-
 function TagBadge({ tag }: Readonly<{ tag: Tag }>) {
   const label = tagLabel(tag);
   return (
-    <span className="inline-flex rounded-sm bg-[rgba(17,24,60,0.07)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.03em] text-[#11183C]">
+    <span className="inline-flex whitespace-nowrap rounded-sm bg-[rgba(17,24,60,0.07)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.03em] text-[#11183C]">
       {label}
     </span>
   );
@@ -250,21 +244,23 @@ function AccordionSection({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="overflow-hidden rounded" style={{ border: "1px solid #E5BDB7" }}>
+    <div className="overflow-hidden rounded" style={{ border: "1px solid #E1E3E4" }}>
       <button
         type="button"
         onClick={onToggle}
         className="flex w-full items-center justify-between px-4 py-4"
-        style={{ background: "#F5F2FC" }}
+        style={{ background: "#F3F4F5" }}
       >
         <div className="flex items-center gap-3">
           <span className={`size-3 rounded-full ${dotColor}`} />
-          <span className="text-[20px] font-semibold leading-7 text-[#1B1B22]">{title}</span>
+          <span className="text-left text-[16px] font-semibold leading-6 text-[#1B1B22] md:text-[20px] md:leading-7">{title}</span>
           <CountBadge count={count} bg={countBg} textColor={countText} />
         </div>
         <ChevronIcon open={open} />
       </button>
-      {open && <div>{children}</div>}
+      {open && (
+        <div className="overflow-x-auto"><div className="min-w-[1000px]">{children}</div></div>
+      )}
     </div>
   );
 }
@@ -273,48 +269,53 @@ function AccordionSection({
 
 const TH = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
 const THEAD_BASE = "grid gap-4 px-3 py-3";
-const THEAD_STYLE = { background: "#F8F9FA", borderBottom: "1px solid #E5BDB7" };
+const THEAD_STYLE = { background: "#F8F9FA", borderBottom: "1px solid #E1E3E4" };
+
+// ID | Status | Title (flexible) | Tag | Date | Action/Driver
+const COLS = "grid-cols-[160px_130px_minmax(160px,1fr)_140px_110px_150px]";
 
 function ActiveTableHeader() {
   return (
-    <div className={`${THEAD_BASE} grid-cols-12`} style={THEAD_STYLE}>
-      <div className={`col-span-2 ${TH}`}>Delivery ID</div>
-      <div className={`col-span-2 ${TH}`}>Status</div>
-      <div className={`col-span-4 ${TH}`}>Title / Destination</div>
-      <div className={`col-span-2 ${TH}`}>Created</div>
-      <div className={`col-span-2 ${TH}`}>Driver</div>
+    <div className={`${THEAD_BASE} ${COLS}`} style={THEAD_STYLE}>
+      <div className={TH}>Delivery ID</div>
+      <div className={TH}>Status</div>
+      <div className={TH}>Title / Destination</div>
+      <div className={TH}>Tag</div>
+      <div className={TH}>Created</div>
+      <div className={TH}>Driver</div>
     </div>
   );
 }
 
 function ApprovedTableHeader() {
   return (
-    <div className={`${THEAD_BASE} grid-cols-12`} style={THEAD_STYLE}>
-      <div className={`col-span-2 ${TH}`}>Delivery ID</div>
-      <div className={`col-span-2 ${TH}`}>Status</div>
-      <div className={`col-span-4 ${TH}`}>Title / Destination</div>
-      <div className={`col-span-2 ${TH}`}>Requested</div>
-      <div className={`col-span-2 ${TH}`}>Action</div>
+    <div className={`${THEAD_BASE} ${COLS}`} style={THEAD_STYLE}>
+      <div className={TH}>Delivery ID</div>
+      <div className={TH}>Status</div>
+      <div className={TH}>Title / Destination</div>
+      <div className={TH}>Tag</div>
+      <div className={TH}>Requested</div>
+      <div className={TH}>Action</div>
     </div>
   );
 }
 
 function PendingReviewTableHeader() {
   return (
-    <div className={`${THEAD_BASE} grid-cols-12`} style={THEAD_STYLE}>
-      <div className={`col-span-2 ${TH}`}>Delivery ID</div>
-      <div className={`col-span-2 ${TH}`}>Status</div>
-      <div className={`col-span-3 ${TH}`}>Title / Destination</div>
-      <div className={`col-span-1 ${TH}`}>Tag</div>
-      <div className={`col-span-2 ${TH}`}>Submitted</div>
-      <div className={`col-span-2 ${TH}`}>Actions</div>
+    <div className={`${THEAD_BASE} ${COLS}`} style={THEAD_STYLE}>
+      <div className={TH}>Delivery ID</div>
+      <div className={TH}>Status</div>
+      <div className={TH}>Title / Destination</div>
+      <div className={TH}>Tag</div>
+      <div className={TH}>Submitted</div>
+      <div className={TH}>Actions</div>
     </div>
   );
 }
 
 // ─── Row Components ───────────────────────────────────────────────────────────
 
-const ROW_BASE = "grid grid-cols-12 items-center gap-4 px-3 py-3 bg-white";
+const ROW_BASE = `grid ${COLS} items-center gap-4 px-3 py-3 bg-white`;
 
 function ActiveRow({
   req,
@@ -327,36 +328,38 @@ function ActiveRow({
 }>) {
   const driver = driverForRequest(req);
   const driverInits = driver ? nameInitials(driver) : "?";
-  const isUrgent = req.urgency === "high";
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={`${ROW_BASE} w-full cursor-pointer text-left transition-colors hover:bg-[rgba(17,24,60,0.03)]`}
-      style={{ borderTop: isFirst ? undefined : "1px solid #E5BDB7" }}
+      style={{ borderTop: isFirst ? undefined : "1px solid #E1E3E4" }}
     >
-      {/* ID */}
-      <div className="col-span-2 text-[12px] font-bold leading-4 text-[#1B1B22]">
-        {shortId(req.id)}
+      {/* ID + urgent */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[12px] font-bold leading-4 text-[#1B1B22]">{shortId(req.id)}</span>
+        <UrgencyBadge urgency={req.urgency} size="tag" />
       </div>
       {/* Status */}
-      <div className="col-span-2 flex flex-col gap-1">
+      <div className="flex">
         <StatusBadge status={req.status} />
-        {isUrgent && <UrgentBadge />}
       </div>
-      {/* Title + Tag */}
-      <div className="col-span-4 flex flex-col gap-0.5 overflow-hidden">
-        <span className="truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
-        {req.tag && <TagBadge tag={req.tag} />}
+      {/* Title */}
+      <div className="overflow-hidden">
+        <span className="block truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
+      </div>
+      {/* Tag */}
+      <div>
+        {req.tag ? <TagBadge tag={req.tag} /> : <span className="text-[11px] text-[#9CA3AF]">—</span>}
       </div>
       {/* Created */}
-      <div className="col-span-2 text-[13px] leading-[18px] text-[#5C403B]">
+      <div className="text-[13px] leading-[18px] text-[#5C403B]">
         {formatDate(req.created_at)}
       </div>
       {/* Driver */}
-      <div className="col-span-2 flex items-center gap-2">
-        <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#E5BDB7] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183C]">
+      <div className="flex items-center gap-2">
+        <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#E1E3E4] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183C]">
           {driverInits}
         </div>
         <span className="truncate text-[12px] font-medium leading-4 text-[#1B1B22]">
@@ -384,7 +387,7 @@ function ApprovedRow({
     <div
       className={`${ROW_BASE} relative`}
       style={{
-        borderTop: isFirst ? undefined : "1px solid #E5BDB7",
+        borderTop: isFirst ? undefined : "1px solid #E1E3E4",
         borderLeft: isUrgent ? "2px solid #B9100B" : undefined,
       }}
     >
@@ -395,26 +398,29 @@ function ApprovedRow({
         aria-label={`View delivery details for ${shortId(req.id)}`}
         onClick={onClick}
       />
-      {/* ID */}
-      <div className="relative z-10 col-span-2 text-[12px] font-bold leading-4 text-[#1B1B22]">
-        {shortId(req.id)}
+      {/* ID + urgent */}
+      <div className="relative z-10 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[12px] font-bold leading-4 text-[#1B1B22]">{shortId(req.id)}</span>
+        <UrgencyBadge urgency={req.urgency} size="tag" />
       </div>
       {/* Status */}
-      <div className="relative z-10 col-span-2 flex flex-col gap-1">
+      <div className="relative z-10 flex">
         <StatusBadge status={req.status} />
-        {isUrgent && <UrgentBadge />}
       </div>
-      {/* Title + Tag */}
-      <div className="relative z-10 col-span-4 flex flex-col gap-0.5 overflow-hidden">
-        <span className="truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
-        {req.tag && <TagBadge tag={req.tag} />}
+      {/* Title */}
+      <div className="relative z-10 overflow-hidden">
+        <span className="block truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
+      </div>
+      {/* Tag */}
+      <div className="relative z-10">
+        {req.tag ? <TagBadge tag={req.tag} /> : <span className="text-[11px] text-[#9CA3AF]">—</span>}
       </div>
       {/* Requested */}
-      <div className="relative z-10 col-span-2 text-[13px] leading-[18px] text-[#5C403B]">
+      <div className="relative z-10 text-[13px] leading-[18px] text-[#5C403B]">
         {formatDate(req.created_at)}
       </div>
       {/* Action — z-10 sits above the overlay button */}
-      <div className="relative z-10 col-span-2 flex items-center">
+      <div className="relative z-10 flex items-center">
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onAssign(); }}
@@ -446,7 +452,7 @@ function PendingReviewRow({
     <div
       className={`${ROW_BASE} relative`}
       style={{
-        borderTop: isFirst ? undefined : "1px solid #E5BDB7",
+        borderTop: isFirst ? undefined : "1px solid #E1E3E4",
         borderLeft: isUrgent ? "2px solid #B9100B" : undefined,
       }}
     >
@@ -457,29 +463,29 @@ function PendingReviewRow({
         aria-label={`View delivery details for ${shortId(req.id)}`}
         onClick={onClick}
       />
-      {/* ID */}
-      <div className="relative z-10 col-span-2 text-[12px] font-bold leading-4 text-[#1B1B22]">
-        {shortId(req.id)}
+      {/* ID + urgent */}
+      <div className="relative z-10 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[12px] font-bold leading-4 text-[#1B1B22]">{shortId(req.id)}</span>
+        <UrgencyBadge urgency={req.urgency} size="tag" />
       </div>
       {/* Status */}
-      <div className="relative z-10 col-span-2 flex flex-col gap-1">
+      <div className="relative z-10 flex">
         <StatusBadge status={req.status} />
-        {isUrgent && <UrgentBadge />}
       </div>
       {/* Title */}
-      <div className="relative z-10 col-span-3 overflow-hidden">
+      <div className="relative z-10 overflow-hidden">
         <span className="block truncate text-[13px] leading-[18px] text-[#1B1B22]">{requestTitle(req)}</span>
       </div>
       {/* Tag */}
-      <div className="relative z-10 col-span-1">
+      <div className="relative z-10">
         {req.tag ? <TagBadge tag={req.tag} /> : <span className="text-[11px] text-[#9CA3AF]">—</span>}
       </div>
       {/* Submitted */}
-      <div className="relative z-10 col-span-2 text-[13px] leading-[18px] text-[#5C403B]">
+      <div className="relative z-10 text-[13px] leading-[18px] text-[#5C403B]">
         {formatDate(req.created_at)}
       </div>
       {/* Actions — z-10 sits above the overlay button */}
-      <div className="relative z-10 col-span-2 flex items-center gap-2">
+      <div className="relative z-10 flex items-center gap-2">
         <button
           type="button"
           onClick={onApprove}
@@ -500,50 +506,6 @@ function PendingReviewRow({
 }
 
 // ─── Urgent Toggle (shared by both modals) ────────────────────────────────────
-
-function UrgentToggle({
-  checked,
-  label,
-  subLabel,
-  onChange,
-}: Readonly<{
-  checked: boolean;
-  label: string;
-  subLabel: string;
-  onChange: () => void;
-}>) {
-  return (
-    <div
-      className="flex items-center justify-between rounded-lg px-4 py-3"
-      style={{
-        background: checked ? "rgba(185,16,11,0.06)" : "#FBF8FF",
-        border: `1px solid ${checked ? "#B9100B" : "#E5BDB7"}`,
-        transition: "background 0.15s, border-color 0.15s",
-      }}
-    >
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[13px] font-semibold text-[#1B1B22]">{label}</span>
-        <span className="text-[11px] text-[#5C403B]">{subLabel}</span>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={onChange}
-        className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#B9100B] focus:ring-offset-1"
-        style={{ background: checked ? "#B9100B" : "#D1D5DB" }}
-      >
-        <span
-          className="pointer-events-none inline-block size-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200"
-          style={{
-            transform: checked ? "translateX(20px)" : "translateX(2px)",
-            marginTop: "2px",
-          }}
-        />
-      </button>
-    </div>
-  );
-}
 
 // ─── Delivery Detail Modal ─────────────────────────────────────────────────────
 
@@ -568,7 +530,7 @@ function DeliveryDetailModal({
   const isPending = req.status === "pending";
   const canEditTag = req.status === "pending" || req.status === "approved";
   const labelClass = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
-  const inputStyle: React.CSSProperties = { background: "#FBF8FF", border: "1px solid #E5BDB7" };
+  const inputStyle: React.CSSProperties = { background: "#F8F9FA", border: "1px solid #E1E3E4" };
 
   async function handleApprove() {
     setSaving(true);
@@ -593,7 +555,6 @@ function DeliveryDetailModal({
   }
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
@@ -606,13 +567,13 @@ function DeliveryDetailModal({
         onClick={onClose}
       />
       <div
-        className="relative z-10 flex max-h-[90vh] w-[520px] flex-col rounded-2xl bg-white shadow-xl"
-        style={{ border: "1px solid #E5BDB7" }}
+        className="relative z-10 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-[520px] flex-col rounded-2xl bg-white shadow-xl"
+        style={{ border: "1px solid #E1E3E4" }}
       >
         {/* Header */}
         <div
           className="flex shrink-0 items-start justify-between rounded-t-2xl px-6 py-5"
-          style={{ borderBottom: "1px solid #E5BDB7", background: "#F5F2FC" }}
+          style={{ borderBottom: "1px solid #E1E3E4", background: "#F3F4F5" }}
         >
           <div className="flex flex-col gap-1.5">
             <span className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
@@ -621,7 +582,7 @@ function DeliveryDetailModal({
             <h2 className="text-[18px] font-semibold leading-6 text-[#1B1B22]">Delivery Details</h2>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <StatusBadge status={req.status} />
-              {req.urgency === "high" && <UrgentBadge />}
+              <UrgencyBadge urgency={req.urgency} size="tag" />
             </div>
           </div>
           <button
@@ -651,7 +612,7 @@ function DeliveryDetailModal({
                   <li
                     key={`${item.item_type}-${i}`}
                     className="flex items-center justify-between rounded-lg px-3 py-2"
-                    style={{ background: "#F5F2FC", border: "1px solid #E5BDB7" }}
+                    style={{ background: "#F3F4F5", border: "1px solid #E1E3E4" }}
                   >
                     <span className="text-[13px] text-[#1B1B22]">{item.item_type}</span>
                     <span className="text-[12px] font-semibold text-[#5C403B]">×{item.quantity}</span>
@@ -676,7 +637,7 @@ function DeliveryDetailModal({
             <div className="flex flex-col gap-1">
               <span className={labelClass}>Assigned Driver</span>
               <div className="flex items-center gap-2">
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-[#E5BDB7] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183C]">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-[#E1E3E4] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183C]">
                   {nameInitials(driver)}
                 </div>
                 <span className="text-[13px] text-[#1B1B22]">{driver ?? "Unassigned"}</span>
@@ -713,13 +674,13 @@ function DeliveryDetailModal({
           {/* Footer */}
           <div
             className="flex items-center justify-end gap-3"
-            style={{ borderTop: "1px solid #E5BDB7", paddingTop: "16px" }}
+            style={{ borderTop: "1px solid #E1E3E4", paddingTop: "16px" }}
           >
             <button
               type="button"
               onClick={onClose}
               className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] hover:bg-[rgba(185,16,11,0.06)]"
-              style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+              style={{ border: "1px solid #E1E3E4", background: "#F8F9FA" }}
             >
               Close
             </button>
@@ -764,12 +725,23 @@ function DeliveryDetailModal({
 
 // ─── New Delivery Modal ───────────────────────────────────────────────────────
 
+const URGENCY_OPTIONS: { value: Urgency; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
 interface NewDeliveryForm {
   orgId: string;
   title: string;
+  items: { itemType: string; quantity: number }[];
   description: string;
+  tag: Tag | "";
+  urgency: Urgency;
   pickupAddress: string;
-  urgent: boolean;
+  pickupCoords: Coordinates | null;
+  dropoffAddress: string;
+  dropoffCoords: Coordinates | null;
 }
 
 function NewDeliveryModal({
@@ -784,12 +756,21 @@ function NewDeliveryModal({
   const [form, setForm] = useState<NewDeliveryForm>({
     orgId: orgs[0]?.id ?? "",
     title: "",
+    items: [{ itemType: "", quantity: 1 }],
     description: "",
+    tag: "",
+    urgency: "medium",
     pickupAddress: "",
-    urgent: false,
+    pickupCoords: null,
+    dropoffAddress: "",
+    dropoffCoords: null,
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function updateItem(index: number, patch: Partial<NewDeliveryForm["items"][number]>) {
+    setForm((f) => ({ ...f, items: f.items.map((row, i) => (i === index ? { ...row, ...patch } : row)) }));
+  }
 
   async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
@@ -805,13 +786,12 @@ function NewDeliveryModal({
     }
   }
 
-  const inputClass =
-    "h-10 w-full rounded-lg px-3 text-[13px] text-[#1B1B22] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#11183C]";
-  const inputStyle: React.CSSProperties = { background: "#FBF8FF", border: "1px solid #E5BDB7" };
-  const labelClass = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
+  const inputBase =
+    "rounded-lg border border-[#e1e3e4] bg-[#f3f4f5] px-[13px] py-[15px] text-[16px] text-[#191c1d] placeholder:text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#11183c]";
+  const inputClass = `w-full ${inputBase}`;
+  const labelClass = "text-[12px] font-semibold tracking-[0.6px] text-[#191c1d]";
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
@@ -824,13 +804,13 @@ function NewDeliveryModal({
         onClick={onClose}
       />
       <div
-        className="relative z-10 w-[480px] rounded-2xl bg-white shadow-xl"
-        style={{ border: "1px solid #E5BDB7" }}
+        className="relative z-10 flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-[560px] flex-col rounded-2xl bg-white shadow-xl"
+        style={{ border: "1px solid #E1E3E4" }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between rounded-t-2xl px-6 py-5"
-          style={{ borderBottom: "1px solid #E5BDB7", background: "#F5F2FC" }}
+          className="flex shrink-0 items-center justify-between rounded-t-2xl px-6 py-5"
+          style={{ borderBottom: "1px solid #E1E3E4", background: "#F3F4F5" }}
         >
           <h2 className="text-[20px] font-semibold leading-7 text-[#1B1B22]">New Delivery</h2>
           <button
@@ -844,7 +824,10 @@ function NewDeliveryModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-5 px-6 py-6">
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          className="flex min-h-0 flex-col gap-5 overflow-y-auto px-6 py-6"
+        >
           {/* Organisation */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="new-org" className={labelClass}>Organisation</label>
@@ -854,7 +837,6 @@ function NewDeliveryModal({
               value={form.orgId}
               onChange={(e) => setForm((f) => ({ ...f, orgId: e.target.value }))}
               className={inputClass}
-              style={inputStyle}
             >
               <option value="">Select an organisation…</option>
               {orgs.map((o) => (
@@ -863,56 +845,133 @@ function NewDeliveryModal({
             </select>
           </div>
 
-          {/* Title / Item */}
+          {/* Request name */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="new-title" className={labelClass}>Request Name</label>
             <input
               id="new-title"
               type="text"
               required
+              maxLength={80}
               placeholder="e.g. Emergency Medical Supplies"
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               className={inputClass}
-              style={inputStyle}
             />
+          </div>
+
+          {/* Items */}
+          <div className="flex flex-col gap-3">
+            <span className={labelClass}>Items</span>
+            {form.items.map((row, index) => (
+              <div key={index} className="flex gap-2">
+                <input
+                  aria-label="Item type"
+                  type="text"
+                  required
+                  placeholder="e.g. First aid kits"
+                  value={row.itemType}
+                  onChange={(e) => updateItem(index, { itemType: e.target.value })}
+                  className={`${inputBase} min-w-0 flex-1`}
+                />
+                <input
+                  aria-label="Quantity"
+                  type="number"
+                  required
+                  min={1}
+                  value={row.quantity}
+                  onChange={(e) => updateItem(index, { quantity: Math.max(1, Number(e.target.value)) })}
+                  className={`${inputBase} w-20 shrink-0`}
+                />
+                <button
+                  type="button"
+                  aria-label="Remove item"
+                  disabled={form.items.length === 1}
+                  onClick={() => setForm((f) => ({ ...f, items: f.items.filter((_, i) => i !== index) }))}
+                  className="flex w-8 shrink-0 items-center justify-center rounded-lg text-[20px] text-[#6b7280] hover:bg-[#f3f4f5] hover:text-[#b9100b] disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, items: [...f.items, { itemType: "", quantity: 1 }] }))}
+              className="w-fit text-[12px] font-semibold text-[#B9100B]"
+            >
+              + Add another item
+            </button>
           </div>
 
           {/* Description */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="new-description" className={labelClass}>Description</label>
+            <label htmlFor="new-description" className={labelClass}>
+              Description <span className="font-normal text-[#6b7280]">(optional)</span>
+            </label>
             <textarea
               id="new-description"
               rows={3}
               placeholder="Additional notes about this delivery…"
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              className="w-full resize-none rounded-lg px-3 py-2.5 text-[13px] leading-[1.6] text-[#1B1B22] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#11183C]"
-              style={inputStyle}
+              className={`${inputClass} resize-none`}
             />
           </div>
 
-          {/* Pickup address */}
+          {/* Team tag */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="new-address" className={labelClass}>Pickup Address</label>
-            <input
-              id="new-address"
-              type="text"
+            <label htmlFor="new-tag" className={labelClass}>Team Tag</label>
+            <select
+              id="new-tag"
               required
-              placeholder="e.g. 123 George St, Sydney NSW 2000"
-              value={form.pickupAddress}
-              onChange={(e) => setForm((f) => ({ ...f, pickupAddress: e.target.value }))}
+              value={form.tag}
+              onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value as Tag }))}
               className={inputClass}
-              style={inputStyle}
-            />
+            >
+              <option value="" disabled>Select a team</option>
+              {TAG_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
 
-          {/* Urgent */}
-          <UrgentToggle
-            checked={form.urgent}
-            label="Mark as Urgent"
-            subLabel="Sets urgency to High — flags this delivery for priority handling"
-            onChange={() => setForm((f) => ({ ...f, urgent: !f.urgent }))}
+          {/* Urgency */}
+          <div className="flex flex-col gap-1.5">
+            <span className={labelClass}>Urgency</span>
+            <div className="flex gap-2">
+              {URGENCY_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  aria-pressed={form.urgency === o.value}
+                  onClick={() => setForm((f) => ({ ...f, urgency: o.value }))}
+                  className={
+                    form.urgency === o.value
+                      ? "flex-1 rounded-lg bg-[#11183c] px-4 py-3 text-[12px] font-semibold text-white"
+                      : "flex-1 rounded-lg border border-[#e1e3e4] bg-[#f3f4f5] px-4 py-3 text-[12px] font-medium text-[#46464e]"
+                  }
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Addresses (Mapbox autocomplete) */}
+          <AddressInput
+            id="new-pickup"
+            label="Pickup Address"
+            value={form.pickupAddress}
+            onChange={(v) => setForm((f) => ({ ...f, pickupAddress: v, pickupCoords: null }))}
+            onSelectCoordinates={(c) => setForm((f) => ({ ...f, pickupCoords: c }))}
+            required
+          />
+          <AddressInput
+            id="new-dropoff"
+            label="Dropoff Address (optional)"
+            value={form.dropoffAddress}
+            onChange={(v) => setForm((f) => ({ ...f, dropoffAddress: v, dropoffCoords: null }))}
+            onSelectCoordinates={(c) => setForm((f) => ({ ...f, dropoffCoords: c }))}
           />
 
           {error && (
@@ -924,13 +983,13 @@ function NewDeliveryModal({
           {/* Footer */}
           <div
             className="flex items-center justify-end gap-3"
-            style={{ borderTop: "1px solid #E5BDB7", paddingTop: "16px" }}
+            style={{ borderTop: "1px solid #E1E3E4", paddingTop: "16px" }}
           >
             <button
               type="button"
               onClick={onClose}
               className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] hover:bg-[rgba(185,16,11,0.06)]"
-              style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+              style={{ border: "1px solid #E1E3E4", background: "#F8F9FA" }}
             >
               Cancel
             </button>
@@ -966,7 +1025,7 @@ function AssignDriverModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const inputStyle: React.CSSProperties = { background: "#FBF8FF", border: "1px solid #E5BDB7" };
+  const inputStyle: React.CSSProperties = { background: "#F8F9FA", border: "1px solid #E1E3E4" };
   const labelClass = "text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B]";
 
   async function handleSubmit(e: { preventDefault(): void }) {
@@ -984,7 +1043,6 @@ function AssignDriverModal({
   }
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
@@ -997,13 +1055,13 @@ function AssignDriverModal({
         onClick={onClose}
       />
       <div
-        className="relative z-10 w-[440px] rounded-2xl bg-white shadow-xl"
-        style={{ border: "1px solid #E5BDB7" }}
+        className="relative z-10 w-[calc(100vw-2rem)] max-w-[440px] rounded-2xl bg-white shadow-xl"
+        style={{ border: "1px solid #E1E3E4" }}
       >
         {/* Header */}
         <div
           className="flex items-center justify-between rounded-t-2xl px-6 py-5"
-          style={{ borderBottom: "1px solid #E5BDB7", background: "#F5F2FC" }}
+          style={{ borderBottom: "1px solid #E1E3E4", background: "#F3F4F5" }}
         >
           <div className="flex flex-col gap-0.5">
             <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#5C403B]">
@@ -1056,13 +1114,13 @@ function AssignDriverModal({
           {/* Footer */}
           <div
             className="flex items-center justify-end gap-3"
-            style={{ borderTop: "1px solid #E5BDB7", paddingTop: "16px" }}
+            style={{ borderTop: "1px solid #E1E3E4", paddingTop: "16px" }}
           >
             <button
               type="button"
               onClick={onClose}
               className="flex h-10 items-center rounded-lg px-5 text-[13px] font-medium text-[#5C403B] hover:bg-[rgba(185,16,11,0.06)]"
-              style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+              style={{ border: "1px solid #E1E3E4", background: "#F8F9FA" }}
             >
               Cancel
             </button>
@@ -1086,7 +1144,7 @@ function EmptyState({ label }: Readonly<{ label: string }>) {
   return (
     <div className="flex flex-col items-center gap-2 py-10 text-center">
       <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-        <circle cx="18" cy="18" r="17" stroke="#e5bdb7" strokeWidth="1.4" />
+        <circle cx="18" cy="18" r="17" stroke="#E1E3E4" strokeWidth="1.4" />
         <path d="M18 12v6M18 21v2" stroke="#b9100b" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
       <p className="text-[13px] font-medium text-[#5C403B]">{label}</p>
@@ -1103,8 +1161,8 @@ export default function DeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
-  const [selectedReq, setSelectedReq] = useState<Request | null>(null);
-  const [assigningReq, setAssigningReq] = useState<Request | null>(null);
+  const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
+  const [assigningReqId, setAssigningReqId] = useState<string | null>(null);
 
   const [pendingOpen, setPendingOpen] = useState(true);
   const [approvedOpen, setApprovedOpen] = useState(true);
@@ -1140,21 +1198,27 @@ export default function DeliveriesPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useRealtimeReload(["requests", "request_items", "pickups", "organisations", "volunteers"], load);
 
-  async function handleApprove(id: string) {
-    const { error } = await supabase.from("requests").update({ status: "approved" }).eq("id", id);
-    if (error) { alert("Failed to approve: " + error.message); return; }
-    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: "approved" } : r)));
+  async function decidePending(id: string, status: "approved" | "rejected") {
+    const verb = status === "approved" ? "approve" : "reject";
+    const { data, error } = await supabase
+      .from("requests")
+      .update({ status })
+      .eq("id", id)
+      .eq("status", "pending")
+      .select("id");
+    if (error) { alert(`Failed to ${verb}: ` + error.message); return; }
+    if (!data?.length) {
+      alert("Another admin has already handled this delivery. The list has been refreshed.");
+      await load();
+      return;
+    }
+    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
   }
 
-  async function handleReject(id: string) {
-    const { error } = await supabase.from("requests").update({ status: "rejected" }).eq("id", id);
-    if (error) { alert("Failed to reject: " + error.message); return; }
-    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r)));
-  }
+  const handleApprove = (id: string) => decidePending(id, "approved");
+  const handleReject = (id: string) => decidePending(id, "rejected");
 
   async function handleTagChange(id: string, tag: Tag | null) {
     const { error } = await supabase.from("requests").update({ tag }).eq("id", id);
@@ -1169,51 +1233,39 @@ export default function DeliveriesPage() {
     });
     if (error) { alert("Failed to assign volunteer: " + error.message); return; }
 
-    setAssigningReq(null);
+    setAssigningReqId(null);
     await load();
   }
 
   async function handleCreateDelivery(form: NewDeliveryForm) {
-    // Geocode the pickup address
-    const coords = await geocodeAddress(form.pickupAddress);
+    const pickup = form.pickupCoords ?? (await geocodeAddress(form.pickupAddress));
+    const dropoffAddress = form.dropoffAddress.trim();
+    const dropoff = dropoffAddress
+      ? (form.dropoffCoords ?? (await geocodeAddress(dropoffAddress)))
+      : null;
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error("Not signed in.");
-
-    const { data: newRequest, error: reqErr } = await supabase
-      .from("requests")
-      .insert({
-        organisation_id: form.orgId,
-        name: form.title.trim(),
-        description: form.description || null,
-        urgency: form.urgent ? "high" : "medium",
-        status: "pending",
-        created_by_admin: true,
-        pickup_address: form.pickupAddress.trim(),
-        pickup_location: `POINT(${coords.lng} ${coords.lat})`,
-      })
-      .select()
-      .single();
-
-    if (reqErr || !newRequest) {
-      throw new Error(reqErr?.message ?? "Failed to create delivery.");
-    }
-
-    const { error: itemErr } = await supabase.from("request_items").insert({
-      request_id: newRequest.id,
-      item_type: form.title,
-      quantity: 1,
+    const { error } = await supabase.rpc("admin_create_request", {
+      p_org_id: form.orgId,
+      p_name: form.title,
+      p_description: form.description,
+      p_urgency: form.urgency,
+      p_tag: form.tag,
+      p_pickup_address: form.pickupAddress,
+      p_dropoff_address: dropoffAddress,
+      p_pickup_lng: pickup.lng,
+      p_pickup_lat: pickup.lat,
+      p_dropoff_lng: dropoff?.lng ?? null,
+      p_dropoff_lat: dropoff?.lat ?? null,
+      p_items: form.items.map((row) => ({ item_type: row.itemType, quantity: row.quantity })),
     });
 
-    if (itemErr) {
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      throw new Error(itemErr.message);
-    }
+    if (error) throw new Error(error.message);
 
     await load();
   }
+
+  const selectedReq = requests.find((r) => r.id === selectedReqId) ?? null;
+  const assigningReq = requests.find((r) => r.id === assigningReqId) ?? null;
 
   const searchLower = search.toLowerCase();
 
@@ -1243,10 +1295,10 @@ export default function DeliveriesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
       {/* Page header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-[32px] font-bold leading-10 tracking-[-0.02em] text-[#1B1B22]">
+        <h1 className="text-[24px] font-bold leading-8 md:text-[32px] md:leading-10 tracking-[-0.02em] text-[#1B1B22]">
           Deliveries Management
         </h1>
         <p className="text-[14px] font-normal leading-5 text-[#5C403B]">
@@ -1255,7 +1307,7 @@ export default function DeliveriesPage() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setShowNewModal(true)}
@@ -1265,16 +1317,16 @@ export default function DeliveriesPage() {
           New Delivery
         </button>
 
-        <div className="flex-1" />
+        <div className="hidden flex-1 sm:block" />
 
-        <div className="relative">
+        <div className="relative order-last w-full sm:order-none sm:w-auto">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search ID, org or tag…"
-            className="h-10 w-64 rounded-sm py-1.5 pl-8 pr-3 text-[12px] font-medium text-[#1B1B22] placeholder:text-[#6B7280] focus:outline-none focus:ring-1 focus:ring-[#11183C]"
-            style={{ background: "#FBF8FF", border: "1px solid #E5BDB7" }}
+            className="h-10 w-full rounded-sm py-1.5 pl-8 pr-3 sm:w-64 text-[12px] font-medium text-[#1B1B22] placeholder:text-[#6B7280] focus:outline-none focus:ring-1 focus:ring-[#11183C]"
+            style={{ background: "#F8F9FA", border: "1px solid #E1E3E4" }}
           />
           <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
             <SearchIcon />
@@ -1285,7 +1337,7 @@ export default function DeliveriesPage() {
           type="button"
           onClick={load}
           className="flex h-10 items-center justify-center rounded-sm px-4 text-[12px] font-medium text-[#1B1B22] hover:bg-[rgba(17,24,60,0.05)]"
-          style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+          style={{ border: "1px solid #E1E3E4", background: "#F8F9FA" }}
         >
           Refresh
         </button>
@@ -1313,7 +1365,7 @@ export default function DeliveriesPage() {
                 key={r.id}
                 req={r}
                 isFirst={i === 0}
-                onClick={() => setSelectedReq(r)}
+                onClick={() => setSelectedReqId(r.id)}
                 onApprove={() => void handleApprove(r.id)}
                 onReject={() => void handleReject(r.id)}
               />
@@ -1340,8 +1392,8 @@ export default function DeliveriesPage() {
                 key={r.id}
                 req={r}
                 isFirst={i === 0}
-                onClick={() => setSelectedReq(r)}
-                onAssign={() => setAssigningReq(r)}
+                onClick={() => setSelectedReqId(r.id)}
+                onAssign={() => setAssigningReqId(r.id)}
               />
             ))
           )}
@@ -1366,7 +1418,7 @@ export default function DeliveriesPage() {
                 key={r.id}
                 req={r}
                 isFirst={i === 0}
-                onClick={() => setSelectedReq(r)}
+                onClick={() => setSelectedReqId(r.id)}
               />
             ))
           )}
@@ -1391,7 +1443,7 @@ export default function DeliveriesPage() {
                 key={r.id}
                 req={r}
                 isFirst={i === 0}
-                onClick={() => setSelectedReq(r)}
+                onClick={() => setSelectedReqId(r.id)}
               />
             ))
           )}
@@ -1412,7 +1464,7 @@ export default function DeliveriesPage() {
       {selectedReq && (
         <DeliveryDetailModal
           req={selectedReq}
-          onClose={() => setSelectedReq(null)}
+          onClose={() => setSelectedReqId(null)}
           onApprove={handleApprove}
           onReject={handleReject}
           onTagChange={handleTagChange}
@@ -1424,7 +1476,7 @@ export default function DeliveriesPage() {
         <AssignDriverModal
           req={assigningReq}
           volunteers={volunteers}
-          onClose={() => setAssigningReq(null)}
+          onClose={() => setAssigningReqId(null)}
           onAssign={handleAssignDriver}
         />
       )}

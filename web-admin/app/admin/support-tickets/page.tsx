@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useRealtimeReload } from "@/lib/useRealtimeReload";
 import { formatTicketNumber } from "@/lib/tickets";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -181,9 +182,9 @@ function MessageBubble({
         className={`max-w-[70%] rounded-2xl px-4 py-3 ${
           isAdmin
             ? "rounded-tr-sm bg-[#11183C] text-white"
-            : "rounded-tl-sm bg-[#F5F2FC] text-[#1b1b22]"
+            : "rounded-tl-sm bg-[#F3F4F5] text-[#1b1b22]"
         }`}
-        style={{ border: isAdmin ? "none" : "1px solid #E5BDB7" }}
+        style={{ border: isAdmin ? "none" : "1px solid #E1E3E4" }}
       >
         <p className="text-[13px] leading-relaxed">{message.message}</p>
         <p
@@ -203,7 +204,7 @@ function OpeningMessage({ ticket }: { ticket: Ticket }) {
     <div className="flex justify-start">
       <div
         className="max-w-[70%] rounded-2xl rounded-tl-sm px-4 py-3"
-        style={{ background: "#F5F2FC", border: "1px solid #E5BDB7" }}
+        style={{ background: "#F3F4F5", border: "1px solid #E1E3E4" }}
       >
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-[#5c403b]">
           Initial Message
@@ -220,15 +221,16 @@ function OpeningMessage({ ticket }: { ticket: Ticket }) {
 export default function SupportTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [messages, setMessages] = useState<TicketMessage[]>([]);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [messagesTicketId, setMessagesTicketId] = useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [messagesLoading, setMessagesLoading] = useState(false);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<TicketStatus | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<SourceType>("all");
+  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) ?? null;
   const [adminId, setAdminId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -251,39 +253,34 @@ export default function SupportTicketsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadTickets();
-  }, [loadTickets]);
+  useRealtimeReload(["support_tickets"], loadTickets);
 
   // Load messages when a ticket is selected
   useEffect(() => {
-    if (!selectedTicket) {
-      setMessages([]);
-      return;
-    }
-
-    setMessagesLoading(true);
+    if (!selectedTicketId) return;
+    let cancelled = false;
 
     supabase
       .from("support_ticket_messages")
       .select("id, ticket_id, sender_type, sender_id, message, created_at")
-      .eq("ticket_id", selectedTicket.id)
+      .eq("ticket_id", selectedTicketId)
       .order("created_at", { ascending: true })
       .then(({ data }) => {
-        if (data) setMessages(data as TicketMessage[]);
-        setMessagesLoading(false);
+        if (cancelled) return;
+        setMessages((data ?? []) as TicketMessage[]);
+        setMessagesTicketId(selectedTicketId);
       });
 
     // Realtime subscription on this ticket's messages
     const channel = supabase
-      .channel(`ticket-messages-${selectedTicket.id}`)
+      .channel(`ticket-messages-${selectedTicketId}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "support_ticket_messages",
-          filter: `ticket_id=eq.${selectedTicket.id}`,
+          filter: `ticket_id=eq.${selectedTicketId}`,
         },
         (payload) => {
           setMessages((prev) => {
@@ -296,9 +293,10 @@ export default function SupportTicketsPage() {
       .subscribe();
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [selectedTicket]);
+  }, [selectedTicketId]);
 
   // Scroll to bottom when messages load or new message arrives
   useEffect(() => {
@@ -335,10 +333,8 @@ export default function SupportTicketsPage() {
     if (error) {
       alert("Failed to update status: " + error.message);
     } else {
-      const updated = { ...selectedTicket, status: newStatus };
-      setSelectedTicket(updated);
       setTickets((prev) =>
-        prev.map((t) => (t.id === selectedTicket.id ? updated : t))
+        prev.map((t) => (t.id === selectedTicket.id ? { ...t, status: newStatus } : t))
       );
     }
     setStatusSaving(false);
@@ -361,16 +357,18 @@ export default function SupportTicketsPage() {
   });
 
   const canReply = selectedTicket?.status !== "resolved";
+  const messagesLoading = selectedTicketId !== null && messagesTicketId !== selectedTicketId;
+  const shownMessages = messagesTicketId === selectedTicketId ? messages : [];
 
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left panel: ticket list ── */}
       <div
-        className="flex w-[320px] shrink-0 flex-col overflow-hidden"
-        style={{ borderRight: "1px solid #E5BDB7" }}
+        className={`${selectedTicket ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col overflow-hidden md:w-[320px]`}
+        style={{ borderRight: "1px solid #E1E3E4" }}
       >
         {/* List header */}
-        <div className="flex flex-col gap-3 p-4" style={{ borderBottom: "1px solid #E5BDB7" }}>
+        <div className="flex flex-col gap-3 p-4" style={{ borderBottom: "1px solid #E1E3E4" }}>
           <h2 className="text-[20px] font-bold text-[#1b1b22]">Support Tickets</h2>
 
           {/* Search */}
@@ -383,7 +381,7 @@ export default function SupportTicketsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search subject, org or volunteer…"
-              className="h-9 w-full rounded-[4px] border border-[#e5bdb7] bg-[#fbf8ff] pl-8 pr-3 text-[12px] text-[#1b1b22] placeholder:text-[#9ca3af] focus:outline-none focus:ring-1 focus:ring-[#11183c]"
+              className="h-9 w-full rounded-[4px] border border-[#E1E3E4] bg-[#F8F9FA] pl-8 pr-3 text-[12px] text-[#1b1b22] placeholder:text-[#9ca3af] focus:outline-none focus:ring-1 focus:ring-[#11183c]"
             />
           </div>
 
@@ -436,7 +434,7 @@ export default function SupportTicketsPage() {
                 key={ticket.id}
                 ticket={ticket}
                 selected={selectedTicket?.id === ticket.id}
-                onClick={() => setSelectedTicket(ticket)}
+                onClick={() => setSelectedTicketId(ticket.id)}
               />
             ))
           )}
@@ -445,13 +443,20 @@ export default function SupportTicketsPage() {
 
       {/* ── Right panel: thread view ── */}
       {selectedTicket ? (
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Thread header */}
           <div
-            className="flex shrink-0 items-center justify-between px-6 py-4"
-            style={{ borderBottom: "1px solid #E5BDB7", background: "#F5F2FC" }}
+            className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-6"
+            style={{ borderBottom: "1px solid #E1E3E4", background: "#F3F4F5" }}
           >
-            <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => setSelectedTicketId(null)}
+              className="flex h-9 items-center gap-1 rounded-[4px] border border-[#E1E3E4] bg-white px-3 text-[12px] font-medium text-[#1b1b22] md:hidden"
+            >
+              ← All tickets
+            </button>
+            <div className="flex min-w-0 flex-col gap-1">
               <h3 className="text-[16px] font-semibold text-[#1b1b22]">
                 <span className="pr-2 text-[12px] text-[#5c403b]">{formatTicketNumber(selectedTicket.ticket_number)}</span>
                 {selectedTicket.subject}
@@ -468,7 +473,7 @@ export default function SupportTicketsPage() {
                 value={selectedTicket.status}
                 disabled={statusSaving}
                 onChange={(e) => handleStatusChange(e.target.value as TicketStatus)}
-                className="h-9 rounded-[4px] border border-[#e5bdb7] bg-white px-3 text-[12px] font-medium text-[#1b1b22] focus:outline-none focus:ring-1 focus:ring-[#11183c] disabled:opacity-50"
+                className="h-9 rounded-[4px] border border-[#E1E3E4] bg-white px-3 text-[12px] font-medium text-[#1b1b22] focus:outline-none focus:ring-1 focus:ring-[#11183c] disabled:opacity-50"
               >
                 <option value="open">Open</option>
                 <option value="in_progress">In Progress</option>
@@ -478,7 +483,7 @@ export default function SupportTicketsPage() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
             {messagesLoading ? (
               <p className="py-8 text-center text-[13px] text-[#5c403b]">Loading thread…</p>
             ) : (
@@ -487,7 +492,7 @@ export default function SupportTicketsPage() {
                 <OpeningMessage ticket={selectedTicket} />
 
                 {/* Thread replies */}
-                {messages.map((msg) => (
+                {shownMessages.map((msg) => (
                   <MessageBubble
                     key={msg.id}
                     message={msg}
@@ -501,8 +506,8 @@ export default function SupportTicketsPage() {
 
           {/* Reply input */}
           <div
-            className="shrink-0 px-6 py-4"
-            style={{ borderTop: "1px solid #E5BDB7", background: "#F8F9FA" }}
+            className="shrink-0 px-4 py-4 md:px-6"
+            style={{ borderTop: "1px solid #E1E3E4", background: "#F8F9FA" }}
           >
             {canReply ? (
               <div className="flex items-end gap-3">
@@ -518,7 +523,7 @@ export default function SupportTicketsPage() {
                   placeholder="Type your reply… (Enter to send, Shift+Enter for new line)"
                   rows={3}
                   className="flex-1 resize-none rounded-lg px-3 py-2.5 text-[13px] leading-relaxed text-[#1b1b22] placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-[#11183c]"
-                  style={{ border: "1px solid #E5BDB7", background: "#FBF8FF" }}
+                  style={{ border: "1px solid #E1E3E4", background: "#F8F9FA" }}
                 />
                 <button
                   type="button"
@@ -537,7 +542,7 @@ export default function SupportTicketsPage() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center">
+        <div className="hidden flex-1 items-center justify-center md:flex">
           <div className="flex flex-col items-center gap-3 text-center">
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
               <rect x="4" y="8" width="40" height="32" rx="3" stroke="#C7C5CF" strokeWidth="1.5" />

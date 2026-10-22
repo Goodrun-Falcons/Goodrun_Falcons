@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useRealtimeReload } from "@/lib/useRealtimeReload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ function XIcon() {
 
 function OrgAvatar({ name }: { name: string }) {
   return (
-    <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#e5bdb7] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183c]">
+    <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#E1E3E4] bg-[#BEC4F1] text-[10px] font-semibold text-[#11183c]">
       {initials(name)}
     </div>
   );
@@ -91,7 +92,7 @@ function RequestCard({
   return (
     <div
       className="flex flex-col gap-4 rounded-[4px] bg-white p-5"
-      style={{ border: "1px solid #E5BDB7" }}
+      style={{ border: "1px solid #E1E3E4" }}
     >
       {/* Header */}
       <div className="flex items-start gap-3">
@@ -106,7 +107,7 @@ function RequestCard({
       </div>
 
       {/* Details */}
-      <div className="flex flex-col gap-1.5 rounded-[4px] bg-[#fbf8ff] p-3" style={{ border: "1px solid #E5BDB7" }}>
+      <div className="flex flex-col gap-1.5 rounded-[4px] bg-[#F8F9FA] p-3" style={{ border: "1px solid #E1E3E4" }}>
         {req.phone && (
           <div className="flex gap-2 text-[12px]">
             <span className="w-16 shrink-0 font-bold uppercase tracking-[0.05em] text-[#5c403b]">Phone</span>
@@ -169,9 +170,7 @@ export default function AccountApprovalPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useRealtimeReload(["signup_requests"], load);
 
   async function handleApprove(req: SignupRequest) {
     setActionLoading(req.id);
@@ -224,10 +223,10 @@ export default function AccountApprovalPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
       {/* Header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-[32px] font-bold leading-10 tracking-[-0.64px] text-[#1b1b22]">
+        <h1 className="text-[24px] font-bold leading-8 md:text-[32px] md:leading-10 tracking-[-0.64px] text-[#1b1b22]">
           Account Approval
         </h1>
         <p className="text-[14px] leading-5 text-[#5c403b]">
@@ -236,8 +235,8 @@ export default function AccountApprovalPage() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-2">
-        <div className="relative">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-auto">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2">
             <SearchIcon />
           </span>
@@ -246,7 +245,7 @@ export default function AccountApprovalPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name or email…"
-            className="h-10 w-64 rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] pl-8 pr-3 text-[12px] font-medium text-[#1b1b22] placeholder:text-[#6b7280] focus:outline-none focus:ring-1 focus:ring-[#b9100b]"
+            className="h-10 w-full rounded-[2px] sm:w-64 border border-[#E1E3E4] bg-[#F8F9FA] pl-8 pr-3 text-[12px] font-medium text-[#1b1b22] placeholder:text-[#6b7280] focus:outline-none focus:ring-1 focus:ring-[#b9100b]"
           />
         </div>
 
@@ -257,7 +256,7 @@ export default function AccountApprovalPage() {
         <button
           type="button"
           onClick={load}
-          className="flex h-10 items-center rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] px-4 text-[12px] font-medium text-[#1b1b22] transition-colors hover:bg-[rgba(17,24,60,0.04)]"
+          className="flex h-10 items-center rounded-[2px] border border-[#E1E3E4] bg-[#F8F9FA] px-4 text-[12px] font-medium text-[#1b1b22] transition-colors hover:bg-[rgba(17,24,60,0.04)]"
         >
           Refresh
         </button>
@@ -271,7 +270,7 @@ export default function AccountApprovalPage() {
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <circle cx="24" cy="24" r="22" stroke="#e5bdb7" strokeWidth="1.5" />
+            <circle cx="24" cy="24" r="22" stroke="#E1E3E4" strokeWidth="1.5" />
             <path
               d="M16 24.5l5.5 5.5 10.5-12"
               stroke="#2e7d32"

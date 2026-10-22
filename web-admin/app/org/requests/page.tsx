@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../supabase/types";
 import { requestLabel, type RequestItem } from "@/lib/requestItems";
 import { tagLabel } from "@/lib/tags";
+import { UrgencyBadge } from "@/components/UrgencyBadge";
 
 type Request = Database["public"]["Tables"]["requests"]["Row"] & {
   request_items: RequestItem[];
@@ -19,18 +20,6 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "active", label: "Active" },
   { key: "delivered", label: "Delivered" },
 ];
-
-function urgencyBadge(urgency: string) {
-  if (urgency === "high") {
-    return (
-      <span className="flex items-center gap-1 rounded-full bg-[#ffdad6] px-2 py-0.5 text-[11px] uppercase text-[#93000a]">
-        <span className="size-1.5 rounded-full bg-[#b9100b]" />
-        Urgent
-      </span>
-    );
-  }
-  return null;
-}
 
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; text: string; label: string }> = {
@@ -192,7 +181,7 @@ function MyRequestsContent() {
                 className="flex flex-col gap-1 rounded-lg border border-[#c7c5cf] bg-[#f8f9fa] p-[17px] transition hover:border-[#11183c]"
               >
                 <div className="flex items-start justify-between">
-                  {urgencyBadge(request.urgency) ?? <span />}
+                  <UrgencyBadge urgency={request.urgency} />
                   {statusBadge(request.status)}
                 </div>
                 <h4 className="pt-1 text-[20px] font-semibold text-[#191c1d]">
