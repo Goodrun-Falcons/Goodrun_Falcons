@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useRealtimeReload } from "@/lib/useRealtimeReload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ function StatusBadge({ status }: { status: "Active" | "Unapproved" | "Inactive" 
 
 function ContactAvatar({ name }: { name: string }) {
   return (
-    <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#e5bdb7] bg-[#BEC4F1] text-[9px] font-semibold text-[#11183c]">
+    <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[#E1E3E4] bg-[#BEC4F1] text-[9px] font-semibold text-[#11183c]">
       {initials(name)}
     </div>
   );
@@ -183,9 +184,7 @@ export default function OrganisationRequestsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useRealtimeReload(["signup_requests", "organisations"], load);
 
   async function handleApprove(req: SignupRequest) {
     setActionLoading(req.id);
@@ -304,10 +303,10 @@ export default function OrganisationRequestsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
       {/* Page Header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-[32px] font-bold leading-10 tracking-[-0.64px] text-[#1b1b22]">
+        <h1 className="text-[24px] font-bold leading-8 md:text-[32px] md:leading-10 tracking-[-0.64px] text-[#1b1b22]">
           Organization Management
         </h1>
         <p className="text-[14px] leading-5 text-[#5c403b]">
@@ -316,8 +315,8 @@ export default function OrganisationRequestsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2">
-        <div className="relative">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-auto">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2">
             <SearchIcon />
           </span>
@@ -326,13 +325,13 @@ export default function OrganisationRequestsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name or email"
-            className="h-10 w-64 rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] pl-8 pr-3 text-[12px] font-medium text-[#1b1b22] placeholder:text-[#6b7280] focus:outline-none focus:ring-1 focus:ring-[#b9100b]"
+            className="h-10 w-full rounded-[2px] sm:w-64 border border-[#E1E3E4] bg-[#F8F9FA] pl-8 pr-3 text-[12px] font-medium text-[#1b1b22] placeholder:text-[#6b7280] focus:outline-none focus:ring-1 focus:ring-[#b9100b]"
           />
         </div>
         <button
           type="button"
           onClick={load}
-          className="flex h-10 items-center rounded-[2px] border border-[#e5bdb7] bg-[#fbf8ff] px-4 text-[12px] font-medium text-[#1b1b22] transition-colors hover:bg-[rgba(17,24,60,0.04)]"
+          className="flex h-10 items-center rounded-[2px] border border-[#E1E3E4] bg-[#F8F9FA] px-4 text-[12px] font-medium text-[#1b1b22] transition-colors hover:bg-[rgba(17,24,60,0.04)]"
         >
           Refresh
         </button>
@@ -342,8 +341,8 @@ export default function OrganisationRequestsPage() {
       <div className="flex flex-col gap-4">
 
         {/* ── Active Organisations ── */}
-        <div className="overflow-hidden rounded-[4px] border border-[#e5bdb7] bg-white">
-          <div className="bg-[#f5f2fc]">
+        <div className="overflow-hidden rounded-[4px] border border-[#E1E3E4] bg-white">
+          <div className="bg-[#F3F4F5]">
             <AccordionHeader
               dotColor="#11183c"
               title="Active Organisations"
@@ -356,8 +355,9 @@ export default function OrganisationRequestsPage() {
           </div>
 
           {activeOpen && (
+            <div className="overflow-x-auto"><div className="min-w-[760px]">
             <div>
-              <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
+              <div className="grid grid-cols-12 gap-4 border-b border-[#E1E3E4] bg-[#f8f9fa] px-3 py-3">
                 <div className="col-span-2"><span className={TH}>Status</span></div>
                 <div className="col-span-4"><span className={TH}>Org Name</span></div>
                 <div className="col-span-3"><span className={TH}>Email</span></div>
@@ -372,7 +372,7 @@ export default function OrganisationRequestsPage() {
                   <div
                     key={org.id}
                     className="grid grid-cols-12 gap-4 px-3 py-3"
-                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                    style={idx > 0 ? { borderTop: "1px solid #E1E3E4" } : {}}
                   >
                     <div className={`col-span-2 ${TC}`}>
                       <StatusBadge status="Active" />
@@ -400,13 +400,13 @@ export default function OrganisationRequestsPage() {
                   </div>
                 ))
               )}
-            </div>
+                        </div></div></div>
           )}
         </div>
 
         {/* ── Pending Approval ── */}
-        <div className="overflow-hidden rounded-[4px] border border-[#e5bdb7] bg-white">
-          <div className="bg-[#f5f2fc]">
+        <div className="overflow-hidden rounded-[4px] border border-[#E1E3E4] bg-white">
+          <div className="bg-[#F3F4F5]">
             <AccordionHeader
               dotColor="#b9100b"
               title="Pending Approval"
@@ -419,8 +419,9 @@ export default function OrganisationRequestsPage() {
           </div>
 
           {pendingOpen && (
+            <div className="overflow-x-auto"><div className="min-w-[760px]">
             <div>
-              <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
+              <div className="grid grid-cols-12 gap-4 border-b border-[#E1E3E4] bg-[#f8f9fa] px-3 py-3">
                 <div className="col-span-2"><span className={TH}>Status</span></div>
                 <div className="col-span-3"><span className={TH}>Org Name</span></div>
                 <div className="col-span-3"><span className={TH}>Email</span></div>
@@ -435,7 +436,7 @@ export default function OrganisationRequestsPage() {
                   <div
                     key={req.id}
                     className="grid grid-cols-12 gap-4 px-3 py-3"
-                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                    style={idx > 0 ? { borderTop: "1px solid #E1E3E4" } : {}}
                   >
                     <div className={`col-span-2 ${TC}`}>
                       <StatusBadge status="Unapproved" />
@@ -470,13 +471,13 @@ export default function OrganisationRequestsPage() {
                   </div>
                 ))
               )}
-            </div>
+                        </div></div></div>
           )}
         </div>
 
         {/* ── Inactive Organisations ── */}
-        <div className="overflow-hidden rounded-[4px] border border-[#e5bdb7] bg-white">
-          <div className="bg-[#f5f2fc]">
+        <div className="overflow-hidden rounded-[4px] border border-[#E1E3E4] bg-white">
+          <div className="bg-[#F3F4F5]">
             <AccordionHeader
               dotColor="#5c403b"
               title="Inactive Organisations"
@@ -489,8 +490,9 @@ export default function OrganisationRequestsPage() {
           </div>
 
           {inactiveOpen && (
+            <div className="overflow-x-auto"><div className="min-w-[760px]">
             <div>
-              <div className="grid grid-cols-12 gap-4 border-b border-[#e5bdb7] bg-[#f8f9fa] px-3 py-3">
+              <div className="grid grid-cols-12 gap-4 border-b border-[#E1E3E4] bg-[#f8f9fa] px-3 py-3">
                 <div className="col-span-2"><span className={TH}>Status</span></div>
                 <div className="col-span-4"><span className={TH}>Org Name</span></div>
                 <div className="col-span-4"><span className={TH}>Email</span></div>
@@ -504,7 +506,7 @@ export default function OrganisationRequestsPage() {
                   <div
                     key={org.id}
                     className="grid grid-cols-12 gap-4 px-3 py-3"
-                    style={idx > 0 ? { borderTop: "1px solid #e5bdb7" } : {}}
+                    style={idx > 0 ? { borderTop: "1px solid #E1E3E4" } : {}}
                   >
                     <div className={`col-span-2 ${TC}`}>
                       <StatusBadge status="Inactive" />
@@ -528,7 +530,7 @@ export default function OrganisationRequestsPage() {
                   </div>
                 ))
               )}
-            </div>
+                        </div></div></div>
           )}
         </div>
 

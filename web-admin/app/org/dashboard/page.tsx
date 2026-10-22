@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import type { Database } from "../../../../supabase/types";
 import { requestLabel, type RequestItem } from "@/lib/requestItems";
+import { UrgencyBadge } from "@/components/UrgencyBadge";
 
 type Request = Database["public"]["Tables"]["requests"]["Row"] & {
   request_items: RequestItem[];
@@ -20,23 +21,11 @@ function ArrowIcon() {
 
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
-    <div className="flex min-w-[100px] flex-col items-center justify-center rounded-lg border border-[#eaecf0] bg-white/95 p-[17px] shadow-sm">
+    <div className="flex min-w-0 flex-col items-center justify-center rounded-lg border border-[#eaecf0] bg-white/95 p-3 text-center shadow-sm sm:p-[17px] lg:min-w-[100px]">
       <span className="text-[20px] font-bold leading-[28px] text-[#11183c]">{value}</span>
-      <span className="pt-1 text-[11px] font-medium uppercase tracking-[0.55px] text-[#46464e]">{label}</span>
+      <span className="pt-1 text-[10px] font-medium uppercase tracking-[0.55px] text-[#46464e] sm:text-[11px]">{label}</span>
     </div>
   );
-}
-
-function urgencyBadge(urgency: string) {
-  if (urgency === "high") {
-    return (
-      <span className="flex items-center gap-1 rounded-full bg-[#ffdad6] px-2 py-0.5 text-[11px] uppercase text-[#93000a]">
-        <span className="size-1.5 rounded-full bg-[#b9100b]" />
-        Urgent
-      </span>
-    );
-  }
-  return null;
 }
 
 function statusBadge(status: string) {
@@ -109,28 +98,28 @@ export default function OrgDashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:gap-6">
         <div className="flex flex-col gap-2">
-          <h2 className="text-[32px] font-semibold leading-[40px] tracking-[-0.32px] text-[#191c1d]">
+          <h2 className="text-[24px] font-semibold leading-[32px] md:text-[32px] md:leading-[40px] tracking-[-0.32px] text-[#191c1d]">
             Good morning, {orgName}
           </h2>
           <p className="text-[16px] text-[#46464e]">
             Here is the current logistics overview for your organisation.
           </p>
         </div>
-        <div className="flex gap-4">
+        <div className="grid w-full grid-cols-3 gap-2 sm:gap-4 lg:flex lg:w-auto">
           <StatCard value={requestsThisMonth} label="Requests this month" />
           <StatCard value={activeCount} label="Currently pending" />
           <StatCard value={deliveredCount} label="Delivered" />
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-lg bg-[#b9100b] p-6 shadow-lg">
+      <div className="flex flex-col gap-4 rounded-lg bg-[#b9100b] p-5 shadow-lg md:p-6">
         <span className="text-[12px] font-semibold uppercase tracking-[0.6px] text-white/90">
           Your Active Requests
         </span>
-        <span className="text-[48px] font-bold leading-[60px] tracking-[-0.96px] text-white">
+        <span className="text-[32px] font-bold leading-[40px] tracking-[-0.96px] text-white md:text-[48px] md:leading-[60px]">
           {activeCount} active {activeCount === 1 ? "request" : "requests"}
         </span>
         <span className="pb-5 text-[16px] text-white/90">
@@ -145,7 +134,7 @@ export default function OrgDashboardPage() {
         </Link>
       </div>
 
-      <div className="flex w-full flex-col items-start rounded-lg border border-[#eaecf0] bg-white/95 p-[25px] shadow-sm">
+      <div className="flex w-full flex-col items-start rounded-lg border border-[#eaecf0] bg-white/95 p-4 shadow-sm md:p-[25px]">
         <div className="flex w-full items-center justify-between pb-6">
           <h3 className="text-[20px] font-semibold text-[#191c1d]">Recent Requests</h3>
           <Link href="/org/requests" className="text-[12px] font-semibold text-[#b9100b]">
@@ -160,19 +149,20 @@ export default function OrgDashboardPage() {
         ) : (
           <div className="flex w-full flex-col gap-4">
             {recentRequests.map((request) => (
-              <div
+              <Link
                 key={request.id}
-                className="flex flex-col gap-1 rounded-lg border border-[#c7c5cf] bg-[#f8f9fa] p-[17px]"
+                href={`/org/requests/${request.id}`}
+                className="flex flex-col gap-1 rounded-lg border border-[#c7c5cf] bg-[#f8f9fa] p-[17px] transition hover:border-[#11183c]"
               >
                 <div className="flex items-start justify-between">
-                  {urgencyBadge(request.urgency) ?? <span />}
+                  <UrgencyBadge urgency={request.urgency} />
                   {statusBadge(request.status)}
                 </div>
                 <h4 className="pt-1 text-[20px] font-semibold text-[#191c1d]">
                   {requestLabel(request)}
                 </h4>
                 {request.description && <p className="text-[16px] text-[#46464e]">{request.description}</p>}
-              </div>
+              </Link>
             ))}
           </div>
         )}

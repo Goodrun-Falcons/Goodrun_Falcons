@@ -118,7 +118,7 @@ export default function ForgotPasswordPage() {
           "linear-gradient(90deg, rgb(248, 249, 250) 0%, rgb(248, 249, 250) 100%), linear-gradient(90deg, rgb(255, 255, 255) 0%, rgb(255, 255, 255) 100%)",
       }}
     >
-      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-[#11183c] p-6">
+      <div className="relative hidden flex-1 flex-col items-center justify-center overflow-hidden bg-[#11183c] p-6 md:flex">
         <div
           className="absolute inset-0 opacity-80"
           style={{
@@ -142,8 +142,8 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center bg-white p-6">
-        <div className="w-full max-w-[448px] rounded-2xl border border-[#e1e3e4] bg-white p-[33px] shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
+      <div className="flex min-w-0 flex-1 items-center justify-center bg-white p-4 md:p-6">
+        <div className="w-full max-w-[448px] rounded-2xl border border-[#e1e3e4] bg-white p-5 shadow-[0_1px_1px_rgba(0,0,0,0.05)] sm:p-[33px]">
           {step === "done" ? (
             <div className="flex flex-col items-center gap-4 py-6 text-center">
               <CheckCircleIcon />

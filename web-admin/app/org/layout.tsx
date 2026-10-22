@@ -9,6 +9,7 @@ import { OrgTopBar } from "@/components/org/OrgTopBar";
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [orgName, setOrgName] = useState<string | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,9 +51,17 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
-      <OrgSidebar orgName={orgName} />
-      <div className="pl-[280px]">
-        <OrgTopBar orgName={orgName} />
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setNavOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+        />
+      )}
+      <OrgSidebar orgName={orgName} open={navOpen} onNavigate={() => setNavOpen(false)} />
+      <div className="min-w-0 md:pl-[280px]">
+        <OrgTopBar orgName={orgName} onMenu={() => setNavOpen(true)} />
         {children}
       </div>
     </div>

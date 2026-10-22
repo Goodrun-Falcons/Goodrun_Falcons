@@ -69,17 +69,17 @@ function VolunteersIcon({ active }: Readonly<{ active?: boolean }>) {
   );
 }
 
-function SupportIcon() {
+function SettingsIcon({ active }: Readonly<{ active?: boolean }>) {
+  const color = active ? "#FFDAD5" : "rgba(227,225,235,0.7)";
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <circle cx="10" cy="10" r="9" stroke="rgba(227,225,235,0.7)" strokeWidth="1.3" />
+    <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path
-        d="M7.5 7.5a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 4"
-        stroke="rgba(227,225,235,0.7)"
+        d="M8.3 2.2h3.4l.4 2a6.4 6.4 0 0 1 1.5.9l1.9-.7 1.7 3-1.5 1.3a6.5 6.5 0 0 1 0 1.7l1.5 1.3-1.7 3-1.9-.7a6.4 6.4 0 0 1-1.5.9l-.4 2H8.3l-.4-2a6.4 6.4 0 0 1-1.5-.9l-1.9.7-1.7-3 1.5-1.3a6.5 6.5 0 0 1 0-1.7L2.8 7.7l1.7-3 1.9.7a6.4 6.4 0 0 1 1.5-.9l.4-2Z"
+        stroke={color}
         strokeWidth="1.3"
-        strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <circle cx="10" cy="15" r="0.75" fill="rgba(227,225,235,0.7)" />
+      <circle cx="10" cy="10" r="2.5" stroke={color} strokeWidth="1.3" />
     </svg>
   );
 }
@@ -126,7 +126,11 @@ const ORG_SUBNAV = [
   },
 ];
 
-export default function AdminSidebar() {
+export default function AdminSidebar({
+  adminName,
+  open,
+  onNavigate,
+}: Readonly<{ adminName: string; open: boolean; onNavigate: () => void }>) {
   const pathname = usePathname();
 
   const orgActive = ORG_SUBNAV.some((s) => pathname.startsWith(s.href));
@@ -136,19 +140,25 @@ export default function AdminSidebar() {
 
   return (
     <aside
-      className="flex w-[280px] shrink-0 flex-col justify-between py-4"
-      style={{ background: "#11183C", borderRight: "1px solid #E5BDB7" }}
+      className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-[280px] shrink-0 flex-col justify-between overflow-y-auto py-4 transition-transform duration-200 md:static md:z-auto md:h-auto md:translate-x-0 ${
+        open ? "translate-x-0" : "-translate-x-full"
+      }`}
+      style={{ background: "#11183C", borderRight: "1px solid #E1E3E4" }}
     >
       {/* Logo */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4 px-6 pb-2">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#B9100B]">
-            <span className="text-xl font-bold text-white">M</span>
+            <span className="text-xl font-bold text-white">
+              {adminName.charAt(0).toUpperCase()}
+            </span>
           </div>
-          <div>
-            <p className="text-[24px] font-extrabold leading-8 text-white">Logistics</p>
-            <p className="text-[24px] font-extrabold leading-8 text-white">Portal</p>
-          </div>
+          <p
+            title={adminName}
+            className="line-clamp-2 min-w-0 break-words text-[20px] font-extrabold leading-[26px] text-white"
+          >
+            {adminName}
+          </p>
         </div>
 
         {/* Main Nav */}
@@ -156,6 +166,7 @@ export default function AdminSidebar() {
           {/* Deliveries */}
           <Link
             href="/admin/deliveries"
+            onClick={onNavigate}
             className="flex items-center gap-3 px-4 py-3"
             style={
               isActive("/admin/deliveries")
@@ -206,6 +217,7 @@ export default function AdminSidebar() {
                   <Link
                     key={href}
                     href={href}
+                    onClick={onNavigate}
                     className="flex items-center gap-3 py-2.5 pl-10 pr-4"
                     style={
                       active
@@ -231,6 +243,7 @@ export default function AdminSidebar() {
           {/* Volunteers */}
           <Link
             href="/admin/volunteers"
+            onClick={onNavigate}
             className="flex items-center gap-3 px-4 py-3"
             style={
               isActive("/admin/volunteers")
@@ -252,6 +265,7 @@ export default function AdminSidebar() {
           {/* Support Tickets (org + volunteer) */}
           <Link
             href="/admin/support-tickets"
+            onClick={onNavigate}
             className="flex items-center gap-3 px-4 py-3"
             style={
               isActive("/admin/support-tickets")
@@ -275,9 +289,27 @@ export default function AdminSidebar() {
       {/* Footer Nav */}
       <div className="flex flex-col border-t border-[#3E446B] pt-2">
         {/* /admin/support redirects to /admin/support-tickets — only one entry kept */}
+        <Link
+          href="/admin/settings"
+          onClick={onNavigate}
+          className="flex items-center gap-3 px-4 py-3"
+          style={
+            isActive("/admin/settings")
+              ? { background: "rgba(143,0,2,0.1)", borderLeft: "4px solid #8F0002", opacity: 0.9 }
+              : {}
+          }
+        >
+          <SettingsIcon active={isActive("/admin/settings")} />
+          <span
+            className="text-[12px] font-medium leading-4"
+            style={{ color: isActive("/admin/settings") ? "#FFDAD5" : "rgba(227,225,235,0.7)" }}
+          >
+            Settings
+          </span>
+        </Link>
         <Link href="/logout" className="flex items-center gap-4 rounded-lg px-4 py-3">
           <LogoutIcon />
-          <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-[rgba(227,225,235,0.7)]">
+          <span className="text-[12px] font-semibold tracking-[0.6px] text-[rgba(227,225,235,0.7)]">
             Logout
           </span>
         </Link>

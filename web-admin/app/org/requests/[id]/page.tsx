@@ -9,6 +9,7 @@ import { LiveTrackingMap } from "@/components/org/LiveTrackingMap";
 import { requestLabel, type RequestItem } from "@/lib/requestItems";
 import { tagLabel } from "@/lib/tags";
 import { HandoverProof } from "@/components/HandoverProof";
+import { UrgencyBadge } from "@/components/UrgencyBadge";
 
 type Request = Database["public"]["Tables"]["requests"]["Row"] & {
   request_items: RequestItem[];
@@ -21,18 +22,6 @@ function BackIcon() {
       <path d="M10 6H2M6 2 2 6l4 4" stroke="#46464e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-}
-
-function urgencyBadge(urgency: string) {
-  if (urgency === "high") {
-    return (
-      <span className="flex items-center gap-1 rounded-full bg-[#ffdad6] px-2 py-0.5 text-[11px] uppercase text-[#93000a]">
-        <span className="size-1.5 rounded-full bg-[#b9100b]" />
-        Urgent
-      </span>
-    );
-  }
-  return null;
 }
 
 function statusBadge(status: string) {
@@ -233,7 +222,7 @@ export default function RequestDetailPage() {
             <h2 className="text-[32px] font-semibold leading-[40px] tracking-[-0.32px] text-[#191c1d]">
               {requestLabel(request)}
             </h2>
-            {urgencyBadge(request.urgency)}
+            <UrgencyBadge urgency={request.urgency} />
           </div>
           <p className="text-[14px] text-[#6b7280]">
             Request #{request.id.slice(0, 8)} · Submitted {new Date(request.created_at).toLocaleString()}
