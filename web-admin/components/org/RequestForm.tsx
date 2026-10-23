@@ -73,9 +73,7 @@ export function RequestForm({ initial }: { initial?: RequestFormValues }) {
 
     try {
       const pickup = pickupCoords ?? (await geocodeAddress(pickupAddress));
-      const dropoff = dropoffAddress
-        ? dropoffCoords ?? (await geocodeAddress(dropoffAddress))
-        : null;
+      const dropoff = dropoffCoords ?? (await geocodeAddress(dropoffAddress));
 
       const payload = {
         p_name: name,
@@ -86,8 +84,8 @@ export function RequestForm({ initial }: { initial?: RequestFormValues }) {
         p_dropoff_address: dropoffAddress,
         p_pickup_lng: pickup.lng,
         p_pickup_lat: pickup.lat,
-        p_dropoff_lng: dropoff?.lng ?? null,
-        p_dropoff_lat: dropoff?.lat ?? null,
+        p_dropoff_lng: dropoff.lng,
+        p_dropoff_lat: dropoff.lat,
         p_items: items.map((row) => ({ item_type: row.itemType, quantity: row.quantity })),
       };
 
@@ -254,10 +252,11 @@ export function RequestForm({ initial }: { initial?: RequestFormValues }) {
 
         <AddressInput
           id="dropoffAddress"
-          label="Dropoff Address (optional)"
+          label="Dropoff Address"
           value={dropoffAddress}
           onChange={setDropoffAddress}
           onSelectCoordinates={setDropoffCoords}
+          required
         />
 
         {error && <p className="text-[13px] leading-[18px] text-[#b9100b]">{error}</p>}
