@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -83,6 +84,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <path d="M3 6h16M3 11h16M3 16h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
             </button>
+            <Image src="/logo.svg" alt="GoodRun" width={32} height={32} className="shrink-0" />
             <span className="truncate text-xl font-bold text-black md:text-2xl">Medical Pantry</span>
           </div>
 
