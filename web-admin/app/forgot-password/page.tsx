@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import {
   PasswordRequirements,
@@ -127,6 +128,7 @@ export default function ForgotPasswordPage() {
           }}
         />
         <div className="relative flex w-full max-w-[448px] flex-col gap-6 px-8">
+          <div className="flex size-20 items-center justify-center rounded-2xl bg-white"><Image src="/logo.svg" alt="GoodRun" width={56} height={56} priority /></div>
           <h1 className="text-[48px] font-bold leading-[60px] tracking-[-0.96px] text-white">
             Medical Pantry
           </h1>

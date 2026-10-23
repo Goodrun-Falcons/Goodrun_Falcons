@@ -5,15 +5,29 @@ import { supabase } from "@/lib/supabase/client";
 
 const BUCKET = "handover-photos";
 
+// The live pickups.handover_photo column is bytea, which PostgREST returns as
+// a "\x<hex>" string holding the raw image bytes.
+function bytesToObjectUrl(hex: string): string {
+  const clean = hex.slice(2);
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+  return URL.createObjectURL(new Blob([bytes], { type: isPng ? "image/png" : "image/jpeg" }));
+}
+
 // Shows the volunteer's proof-of-delivery photo for a request, if one was
-// uploaded. pickups.handover_photo may be a full URL or a storage path
-// inside the private handover-photos bucket (resolved to a signed URL).
+// uploaded. pickups.handover_photo may be raw image bytes (bytea), a full URL,
+// or a storage path inside the private handover-photos bucket (resolved to a
+// signed URL).
 export function HandoverProof({ requestId }: { requestId: string }) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [handedOverAt, setHandedOverAt] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let objectUrl: string | null = null;
 
     async function load() {
       const { data } = await supabase
@@ -28,12 +42,17 @@ export function HandoverProof({ requestId }: { requestId: string }) {
       if (cancelled || !data?.handover_photo) return;
 
       let url = data.handover_photo;
-      if (!/^https?:\/\//.test(url)) {
+      if (url.startsWith("\\x")) {
+        url = objectUrl = bytesToObjectUrl(url);
+      } else if (!/^https?:\/\//.test(url)) {
         const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(url, 3600);
         if (!signed) return;
         url = signed.signedUrl;
       }
-      if (cancelled) return;
+      if (cancelled) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        return;
+      }
       setPhotoUrl(url);
       setHandedOverAt(data.handover_timestamp);
     }
@@ -41,6 +60,7 @@ export function HandoverProof({ requestId }: { requestId: string }) {
 
     return () => {
       cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [requestId]);
 

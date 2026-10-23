@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -93,6 +94,10 @@ export function OrgSidebar({
         open ? "translate-x-0" : "-translate-x-full"
       }`}
     >
+      <div className="flex items-center gap-3 px-6 pt-2">
+        <div className="flex size-9 items-center justify-center rounded-lg bg-white"><Image src="/logo.svg" alt="GoodRun" width={26} height={26} /></div>
+        <span className="text-[16px] font-extrabold text-white">GoodRun</span>
+      </div>
       <div className="flex h-[81px] items-center px-6">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex h-10 w-[38px] shrink-0 items-center justify-center rounded-full bg-[#b9100b]">
