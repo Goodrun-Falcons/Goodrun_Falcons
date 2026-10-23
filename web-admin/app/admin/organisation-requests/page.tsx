@@ -307,10 +307,10 @@ export default function OrganisationRequestsPage() {
       {/* Page Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-[24px] font-bold leading-8 md:text-[32px] md:leading-10 tracking-[-0.64px] text-[#1b1b22]">
-          Organization Management
+          Organisation Management
         </h1>
         <p className="text-[14px] leading-5 text-[#5c403b]">
-          Manage organization approvals and account details
+          Manage organisation approvals and account details
         </p>
       </div>
 

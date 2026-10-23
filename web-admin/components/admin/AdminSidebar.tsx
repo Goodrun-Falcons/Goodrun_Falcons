@@ -116,7 +116,7 @@ function ChevronIcon({ open }: Readonly<{ open: boolean }>) {
 const ORG_SUBNAV = [
   {
     href: "/admin/organisation-requests",
-    label: "Organization Requests",
+    label: "Organisation Management",
     icon: OrgRequestsIcon,
   },
   {

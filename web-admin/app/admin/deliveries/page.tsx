@@ -375,11 +375,13 @@ function ApprovedRow({
   isFirst,
   onClick,
   onAssign,
+  onDelete,
 }: Readonly<{
   req: Request;
   isFirst: boolean;
   onClick: () => void;
   onAssign: () => void;
+  onDelete: () => void;
 }>) {
   const isUrgent = req.urgency === "high";
 
@@ -420,13 +422,20 @@ function ApprovedRow({
         {formatDate(req.created_at)}
       </div>
       {/* Action — z-10 sits above the overlay button */}
-      <div className="relative z-10 flex items-center">
+      <div className="relative z-10 flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onAssign(); }}
           className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#8F0002] transition-opacity hover:opacity-70"
         >
           Assign Driver
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="text-[12px] font-bold uppercase tracking-[0.05em] text-[#5C403B] transition-opacity hover:text-[#B9100B]"
+        >
+          Delete
         </button>
       </div>
     </div>
@@ -968,10 +977,11 @@ function NewDeliveryModal({
           />
           <AddressInput
             id="new-dropoff"
-            label="Dropoff Address (optional)"
+            label="Dropoff Address"
             value={form.dropoffAddress}
             onChange={(v) => setForm((f) => ({ ...f, dropoffAddress: v, dropoffCoords: null }))}
             onSelectCoordinates={(c) => setForm((f) => ({ ...f, dropoffCoords: c }))}
+            required
           />
 
           {error && (
@@ -1237,12 +1247,18 @@ export default function DeliveriesPage() {
     await load();
   }
 
+  async function handleDelete(req: Request) {
+    if (!confirm(`Permanently delete ${shortId(req.id)} (${requestTitle(req)})? This cannot be undone.`)) return;
+    const { error } = await supabase.rpc("admin_delete_request", { p_request_id: req.id });
+    if (error) { alert("Failed to delete: " + error.message); await load(); return; }
+    setRequests((prev) => prev.filter((r) => r.id !== req.id));
+    setSelectedReqId((cur) => (cur === req.id ? null : cur));
+  }
+
   async function handleCreateDelivery(form: NewDeliveryForm) {
     const pickup = form.pickupCoords ?? (await geocodeAddress(form.pickupAddress));
     const dropoffAddress = form.dropoffAddress.trim();
-    const dropoff = dropoffAddress
-      ? (form.dropoffCoords ?? (await geocodeAddress(dropoffAddress)))
-      : null;
+    const dropoff = form.dropoffCoords ?? (await geocodeAddress(dropoffAddress));
 
     const { error } = await supabase.rpc("admin_create_request", {
       p_org_id: form.orgId,
@@ -1254,8 +1270,8 @@ export default function DeliveriesPage() {
       p_dropoff_address: dropoffAddress,
       p_pickup_lng: pickup.lng,
       p_pickup_lat: pickup.lat,
-      p_dropoff_lng: dropoff?.lng ?? null,
-      p_dropoff_lat: dropoff?.lat ?? null,
+      p_dropoff_lng: dropoff.lng,
+      p_dropoff_lat: dropoff.lat,
       p_items: form.items.map((row) => ({ item_type: row.itemType, quantity: row.quantity })),
     });
 
@@ -1394,6 +1410,7 @@ export default function DeliveriesPage() {
                 isFirst={i === 0}
                 onClick={() => setSelectedReqId(r.id)}
                 onAssign={() => setAssigningReqId(r.id)}
+                onDelete={() => void handleDelete(r)}
               />
             ))
           )}
