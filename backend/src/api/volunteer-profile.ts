@@ -2,14 +2,40 @@ import "dotenv/config";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { createClient } from "@supabase/supabase-js";
+import { hashSecurityAnswer } from "../utils/security-answer.js";
+import { verifySecurityAnswer } from "../utils/security-answer.js";
+import * as process from "process";
+import { REPL_MODE_SLOPPY } from "repl";
 
 const app = Fastify({ logger: true });
 
 
 // initialise Supabase client
+
+
+const supabaseUrl = process.env.SUPABASE_URL ? process.env.SUPABASE_URL : "";
+const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY
+
+if (!supabasePublishableKey || !supabaseSecretKey) {
+  throw new Error("Missing Supabase environment variables");
+}
+
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_PUBLISHABLE_KEY!
+  supabaseUrl,
+  supabasePublishableKey
+);
+
+const supabaseAdmin = createClient(
+  supabaseUrl,
+  supabaseSecretKey,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  }
 );
 
 
@@ -22,7 +48,7 @@ export default async function volunteerProfileAPI(
   // US 3
   app.get("/volunteers/me", async (request, reply) => {
     const authHeader = request.headers.authorization;
-
+ 
     // check auth header format, return error when invalid
     if (!authHeader?.startsWith("Bearer ")) {
       return reply.status(401).send({
@@ -55,7 +81,17 @@ export default async function volunteerProfileAPI(
     // get volunteer profile, check for profile existence
     const { data, error } = await supabaseUser
       .from("volunteers")
-      .select("*")
+      .select(`
+        id,
+        email,
+        full_name,
+        phone,
+        vehicle_type,
+        availability,
+        preferred_package_size,
+        status,
+        created_at
+      `)
       .eq("id", user.id)
       .single();
 
@@ -72,7 +108,6 @@ export default async function volunteerProfileAPI(
   // PATCH Profile
   // volunteer users updating profile data
   // US 4
-
   app.patch("/volunteers/me", async (request, reply) => {
     const authHeader = request.headers.authorization;
 
@@ -95,6 +130,13 @@ export default async function volunteerProfileAPI(
       });
     }
 
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
 
     const body = request.body as {
       full_name?: string;
@@ -135,14 +177,6 @@ export default async function volunteerProfileAPI(
       });
     }
 
-    const supabaseUser = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-      {
-        accessToken: async() => token
-      }
-    )
-
     // update profile data
     const { data, error } = await supabaseUser
       .from("volunteers")
@@ -178,6 +212,10 @@ export default async function volunteerProfileAPI(
         // };
         preferred_package_size?: string;
         // availability?: Record<string, boolean>;
+        security_question_one?: string;
+        security_question_two?: string;
+        security_answer_one?: string;
+        security_answer_two?: string;
       };
 
       const {
@@ -189,6 +227,10 @@ export default async function volunteerProfileAPI(
         // serviceArea,
         // availability,
         preferred_package_size,
+        security_question_one,
+        security_question_two,
+        security_answer_one,
+        security_answer_two,
       } = body;
 
 
@@ -207,6 +249,20 @@ export default async function volunteerProfileAPI(
           message: "Password must be at least 6 characters long",
         });
       }
+
+      // hash security answers
+      var a_one_hashed, a_two_hashed;
+      if (security_answer_one){
+        a_one_hashed = await hashSecurityAnswer(security_answer_one);
+      } else {
+        a_one_hashed = null;
+      }
+      if (security_answer_two){
+        a_two_hashed = await hashSecurityAnswer(security_answer_two);
+      } else {
+        a_two_hashed = null;
+      }
+      const security_answer_one_hashed = a_one_hashed, security_answer_two_hashed = a_two_hashed;
 
 
       // register using Supabase Auth
@@ -238,7 +294,7 @@ export default async function volunteerProfileAPI(
         .from("volunteers")
         .insert({
           id: userId,
-          email,
+          email: email,
           full_name: full_name,
           phone: phone ?? null,
           // vehicle_type: vehicleType ?? null,
@@ -248,10 +304,37 @@ export default async function volunteerProfileAPI(
           preferred_package_size: preferred_package_size,
           // availability: availability ?? null,
           status: "pending_vetting",
+          security_question_one: security_question_one,
+          security_question_two: security_question_two,
+          security_answer_one: security_answer_one_hashed,
+          security_answer_two: security_answer_two_hashed,
         });
 
       if (volunteerError) {
+        request.log.error(
+          { err: volunteerError, userId },
+          "Failed to create volunteer profile"
+        );
+      
+        try {
+          const { error: deleteError } =
+            await supabaseAdmin.auth.admin.deleteUser(userId);
+      
+          if (deleteError) {
+            request.log.error(
+              { err: deleteError, userId },
+              "Failed to clean up Supabase Auth user"
+            );
+          }
+        } catch (cleanupError) {
+          request.log.error(
+            { err: cleanupError, userId },
+            "Unexpected error while cleaning up Auth user"
+          );
+        }
+      
         return reply.status(500).send({
+          err: volunteerError,
           error: "Failed to create volunteer application",
         });
       }
@@ -362,4 +445,409 @@ export default async function volunteerProfileAPI(
       });
     }
   });
+
+
+  app.post("/volunteers/security-questions", async (request, reply) => {
+    const body = request.body as { email: string; };
+    const{ email } = body;
+
+    const {data: questions, error} = await supabaseAdmin
+      .from("volunteers")
+      .select("security_question_one, security_question_two")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (error) {
+      return reply.status(400).send({error: error});
+    }
+
+    if (!questions) {
+      return reply.status(400).send({message: "Email not found"})
+    }
+
+    return reply.send(questions);
+  });
+  
+
+  app.post("/volunteers/reset-password", async (request, reply) => {
+      try {
+        const body = request.body as {
+          email: string;
+          security_answer_one: string;
+          security_answer_two: string;
+          new_password: string;
+        }
+        const {
+          email,
+          security_answer_one,
+          security_answer_two,
+          new_password,
+        } = body;
+
+      
+        if (new_password.length < 6) {
+          return reply.status(400).send({
+            error: "New password does not meet the requirements",
+          });
+        }
+
+        const normalisedEmail = email.trim().toLowerCase();
+
+        // find the volunteer using the server-side admin client.
+        const { data: volunteer, error: lookupError } =
+          await supabaseAdmin
+            .from("volunteers")
+            .select(
+              "id, security_question_one, security_question_two, security_answer_one, security_answer_two"
+            )
+            .ilike("email", normalisedEmail)
+            .maybeSingle();
+
+        if (lookupError) {
+          request.log.error(
+            { err: lookupError },
+            "Failed to look up volunteer for password reset"
+          );
+
+          return reply.status(500).send({
+            error: "Unable to process password reset",
+          });
+        }
+
+        
+        if (
+          !volunteer ||
+          !(volunteer.security_answer_one || volunteer.security_answer_two)
+        ) {
+          return reply.status(400).send({
+            error: "IDENTITY_ERROR",
+            message: "Unable to verify identity or reset password",
+          });;
+        }
+
+        // verify the answers against their stored hashes.
+        const answerOneValid = await verifySecurityAnswer(
+          security_answer_one,
+          volunteer.security_answer_one
+        );
+
+        const answerTwoValid = await verifySecurityAnswer(
+          security_answer_two,
+          volunteer.security_answer_two
+        );
+
+        if (!(answerOneValid || answerTwoValid)) {
+          return reply.status(400).send({
+            error: "IDENTITY_ERROR",
+            message: "Unable to verify identity or reset password",
+          });
+        }
+
+        // update the user's Auth password.
+        const { error: updateError } =
+          await supabaseAdmin.auth.admin.updateUserById(
+            volunteer.id,
+            { password: new_password }
+          );
+
+        if (updateError) {
+          request.log.error(
+            { err: updateError, userId: volunteer.id },
+            "Failed to update password"
+          );
+
+          return reply.status(500).send({
+            error: "Unable to update password",
+          });
+        }
+
+        return reply.status(200).send({
+          message: "Password reset successfully",
+        });
+      } catch (error) {
+        request.log.error(
+          { err: error },
+          "Unexpected password reset error"
+        );
+
+        return reply.status(500).send({
+          error: "Unable to process password reset",
+        });
+      }
+    }
+  );
+
+
+  app.post("/volunteers/create-ticket", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    const body = request.body as {
+      subject: string,
+      message: string
+    }
+
+    const {
+      subject,
+      message
+    } = body;
+
+    const {error } = await supabaseUser
+    .from("support_tickets")
+    .insert({
+      subject: subject,
+      message: message,
+      volunteer_id: user.id,
+      status: "open",
+    });
+
+    if (error) {return reply.status(400).send({ message: "Failed to create support ticket", error:error })};
+
+    return reply.status(201).send({ message: "Support ticket submitted successfully" });
+
+  });
+  
+
+  app.get("/volunteers/view-ticket", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    const { data, error} = await supabaseUser
+    .from("support_tickets")
+    .select(`
+        id,
+        subject,
+        message,
+        status
+    `)
+    .eq("volunteer_id", user.id)
+    
+
+    if (error) {return reply.status(500).send({ error: error, message: "Cound not find relevant tickets"})};
+
+    return reply.status(200).send(data);
+
+  });
+
+
+  app.get("/volunteers/statistics", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    // count completed routes
+    const {
+      count: routeCount,
+      error: routeError,
+    } = await supabaseUser
+      .from("routes")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("volunteer_id", user.id)
+      .eq("status", "completed");
+    
+    if (routeError) {
+      request.log.error(
+        { err: routeError },
+        "Failed to count completed routes"
+      );
+    
+      return reply.status(500).send({
+        error: "Failed to count completed routes",
+      });
+    }
+
+
+    // count delivered items
+    const {
+      count: itemCount,
+      error: itemError,
+    } = await supabaseUser
+      .from("request_items")
+      .select("id, requests!inner(id)", {
+        count: "exact",
+        head: true,
+      })
+      .eq("requests.volunteer_id", user.id)
+      .eq("requests.status", "delivered");
+    
+    if (itemError) {
+      request.log.error(
+        { err: itemError },
+        "Failed to count delivered items"
+      );
+    
+      return reply.status(500).send({
+        error: "Failed to count delivered items",
+      });
+    }
+
+    // count unique organisations
+    const {
+      data: requests,
+      error: orgError,
+    } = await supabaseUser
+      .from("requests")
+      .select("organisation_id")
+      .eq("volunteer_id", user.id);
+    
+    if (orgError) {
+      request.log.error(
+        { err: orgError },
+        "Failed to count organisations"
+      );
+    
+      return reply.status(500).send({
+        error: "Failed to count organisations",
+      });
+    }
+    
+    // Remove null values and count distinct organisation IDs
+    const uniqueOrgIds = new Set(
+      requests
+        .map((row) => row.organisation_id)
+        .filter((id): id is string => id !== null)
+    );
+    
+    const organisationCount = uniqueOrgIds.size;
+
+    if (routeCount == null || itemCount == null || organisationCount == null) {
+      return reply.status(500).send({message: "Failed to count"});
+    }
+    
+    return reply.status(200).send({
+      route_count: routeCount, item_count: itemCount, organisation_count: organisationCount
+    });
+
+  });
+
+
+  app.get("/volunteers/:id/view-ticket-messages", async (request, reply) => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return reply.status(401).send({
+        error: "Missing or invalid authorisation header"
+      });
+    }
+
+    const token = authHeader.substring("Bearer ".length);
+
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return reply.status(401).send({
+        error: "Unauthorised"
+      });
+    }
+
+    const supabaseUser = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      {
+        accessToken: async() => token
+      }
+    )
+
+    const { id: ticketId } = request.params as { id: string };
+
+    const { data, error} = await supabaseUser
+    .from("support_ticket_messages")
+    .select(`
+        sender_type,
+        message,
+        created_at
+    `)
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true })
+    
+
+    if (error) {return reply.status(500).send({ error: error, message: "Cound not find relevant tickets"})};
+
+    return reply.status(200).send(data);
+
+  });
+
 }
